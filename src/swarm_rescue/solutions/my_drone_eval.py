@@ -2,9 +2,10 @@ from swarm_rescue.solutions.my_drone_random import MyDroneRandom
 from swarm_rescue.solutions.my_drone_lidar_communication import MyDroneLidarCommunication
 from swarm_rescue.solutions.my_drone_motionless import MyDroneMotionless
 from swarm_rescue.solutions.my_drone_basic_control import MyDroneBasicControl
+from swarm_rescue.solutions.my_drone_bad_control import MyDroneBadControl
 
 
-class MyDroneEval(MyDroneBasicControl):
+class MyDroneEval(MyDroneBadControl):
     """
     Evaluation drone class that inherits from MyDroneRandom.
 
