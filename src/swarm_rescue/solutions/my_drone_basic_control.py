@@ -37,8 +37,8 @@ class MyDroneBasicControl(DroneAbstract):
         Returns:
             np.array(): x,y GPS position
         """
-        # return self.measured_gps_position()
-        return np.array(self.true_position(), dtype=float)
+        return self.measured_gps_position()
+        #return np.array(self.true_position(), dtype=float)
 
     def update_yaw(self):
         """Update yaw
@@ -46,8 +46,8 @@ class MyDroneBasicControl(DroneAbstract):
         Returns:
             float: the yaw in radians
         """
-        # return self.measured_compass_angle()
-        return float(self.true_angle())
+        return self.measured_compass_angle()
+        #return float(self.true_angle())
 
     def update_velocity(self):
         """Update velocity
@@ -55,8 +55,8 @@ class MyDroneBasicControl(DroneAbstract):
         Returns:
             np.array(): x,y velocity
         """
-        # return self.measured_velocity()
-        return np.array(self.true_velocity(), dtype=float)
+        return self.measured_velocity()
+        #return np.array(self.true_velocity(), dtype=float)
 
     def update_angular_velocity(self):
         """Update angular velocity
@@ -64,8 +64,8 @@ class MyDroneBasicControl(DroneAbstract):
         Returns:
             float: the angular velocity in radians per second
         """
-        # return self.measured_angular_velocity()
-        return float(self.true_angular_velocity())
+        return self.measured_angular_velocity()
+        #return float(self.true_angular_velocity())
 
     def update_estimate(self):
         """Functions which updates or not the state variables of our drone
