@@ -13,6 +13,6 @@ class MyDroneEval(MyDroneMapper):
     """
 
     def __init__(self, **kwargs):
-        super().__init__(goal=(150.0, 100.0), **kwargs)
+        super().__init__(goal=(-310.0, -180.0), **kwargs)
 
 

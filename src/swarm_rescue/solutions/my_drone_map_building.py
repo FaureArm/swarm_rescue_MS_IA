@@ -8,15 +8,17 @@ from swarm_rescue.simulation.utils.utils import normalize_angle
 class MyDroneMapper(DroneAbstract):
     # gains, to adjust/test -> todo automatically, running headless?
     KP_POSITION = 0.015
-    KD_VELOCITY = 0.30
+    KD_VELOCITY = 0.05
     KP_HEADING = 0.8
 
     def __init__(self, *, goal=None, heading_goal=None, **kwargs):
         super().__init__(**kwargs)
         # if no goal set, return to center of map
-        self.goal = np.asarray((0.0,0.0), dtype=float) if goal is None else np.asarray(goal, dtype=float)
+        self.mission_goal = np.asarray((0.0,0.0), dtype=float) if goal is None else np.asarray(goal, dtype=float)
+        self.active_waypoint = self.mission_goal
         self.heading_goal = heading_goal
         self.map = set() # map holding hard pixels. Set to easily handle duplicates
+        self.avoidance_sign = None
 
         self.position_ = None
         self.yaw_ = None
@@ -80,19 +82,98 @@ class MyDroneMapper(DroneAbstract):
         self.velocity_ = self.update_velocity()
         return True
 
-    def uptade_goal(self):
+    def uptade_mission_goal(self):
         """Functions which updates or not the current goal
         
         Returns:
             boolean: True if we managed to update our goal, False else
         """
-        # change goals
-        if self.goal is not None and self.position_ is not None :
-            if np.linalg.norm(self.goal - self.position_) < 1:
-                self.goal = np.random.uniform(-100, 100, size=2)  # random new goal if close enough
-                print(f"New goal: {self.goal}")
+        #TODO: add something that checks that goal is not outside map boundaries
+
+        # if final mission goal achieved, then do random
+        if self.mission_goal is not None and self.position_ is not None :
+            if np.linalg.norm(self.mission_goal - self.position_) < 1:
+                self.mission_goal = np.random.uniform(-200, 200, size=2)  # random new goal if close enough
+                print(f"New goal: {self.mission_goal}")
+
+        # later could add a condition on either class, or if has a person, or if no coms, etc
+        
+        self.update_active_waypoint()
 
         return True
+
+    def update_active_waypoint(self):
+        """method to update active waypoint, based on mission
+         goal and obstacle presence
+        """
+        # if we reach active waypoint, we default back to mission goal
+        if self.active_waypoint is not None and self.position_ is not None :
+            if np.linalg.norm(self.active_waypoint - self.position_) < 30:
+                self.active_waypoint = self.mission_goal
+
+        # now we check that there isnt any obs
+        # check with a segment if we cross hard pixels, does it come across a hard pixel
+        if self.obstacle_toward_waypoint():
+            # obstacle present, so we need to find another waypoint
+
+            if self.avoidance_sign is None:
+                self.avoidance_sign = float(np.sign(self.mission_goal[1] - self.position_[1])) or 1.0
+            start = np.asarray(self.position_, dtype=float)
+            candidate = start + np.array([0.0, 50.0 * self.avoidance_sign])
+
+            # World bounds are centered on (0, 0). Leave room for the drone's radius.
+            limits = np.asarray(self.size_area, dtype=float) / 2.0 - 12.0
+
+            if np.any(np.abs(candidate) > limits):
+                opposite = start + np.array([0.0, -50.0 * self.avoidance_sign])
+
+                if np.all(np.abs(opposite) <= limits):
+                    self.avoidance_sign *= -1.0
+                    candidate = opposite
+                else:
+                    candidate = start.copy()  # Neither candidate fits: brake.
+
+            self.active_waypoint = candidate
+
+
+            """direction = np.asarray(self.mission_goal) - np.asarray(self.position_)
+            direction = direction / np.linalg.norm(direction)
+            angle_sign = np.sign(np.arctan2(self.mission_goal[1] - self.position_[1], self.mission_goal[0] - self.position_[0]))
+            self.active_waypoint = self.position_ + 50.0 * angle_sign"""
+            #print(f"Angle sign: {angle_sign}")
+            print(f"Avoidance sig: {self.avoidance_sign}")
+            print(f"New active waypoint: {self.active_waypoint}")
+        else:
+            self.avoidance_sign = None
+            self.active_waypoint = self.mission_goal
+        return True
+
+    def obstacle_toward_waypoint(self):
+        """now we check that there isnt any obs
+        # check with a segment if we cross hard pixels, does it come across a hard pixel
+
+        Returns:
+            _type_: _description_
+        """
+
+        if self.position_ is None or self.active_waypoint is None:
+            return False
+
+        start = np.asarray(self.position_, dtype=float)
+        delta = np.asarray(self.mission_goal, dtype=float) - start
+        distance = np.linalg.norm(delta)
+        if distance == 0 or not self.map:
+            return False
+
+        # Drone radius is 10, so its diameter is 20 world pixels
+        length = min(100.0, distance)
+        end = start + delta / distance * length
+
+        # Sample densely, then round just like update_lidar_map()
+        count = int(np.ceil(length * 2)) + 1
+        pixels = np.rint(np.linspace(start, end, count)).astype(int)
+
+        return any((int(x), int(y)) in self.map for x, y in pixels)
 
     def compute_thrust(self):
         """Functions which computes thrusts along x and y axis at given timestep
@@ -105,11 +186,11 @@ class MyDroneMapper(DroneAbstract):
         # we calculate ux and uy, thrusts along x and y axis 
         # in map's frame
         #TODO: wwriting full thing for ease of reading, otherwise just following line:
-        # ux, uy = self.KP_POSITION * (self.goal - self.position_) - self.KD_VELOCITY * self.velocity_
+        # ux, uy = self.KP_POSITION * (self.active_waypoint - self.position_) - self.KD_VELOCITY * self.velocity_
         vx = self.velocity_[0]
         vy = self.velocity_[1]
         x, y = self.position_[0], self.position_[1]
-        goal_x, goal_y = self.goal[0], self.goal[1]
+        goal_x, goal_y = self.active_waypoint[0], self.active_waypoint[1]
         ux = self.KP_POSITION * (goal_x - x) - self.KD_VELOCITY * vx
         uy = self.KP_POSITION * (goal_y - y) - self.KD_VELOCITY * vy
         ###########
@@ -183,17 +264,15 @@ class MyDroneMapper(DroneAbstract):
     def control(self):
 
         self.update_lidar_map(self.true_position(), self.true_angle())
-        #if self.elapsed_timestep % 15 == 0:
-        #    self.plot_lidar_map()
 
-        self.uptade_goal()
+        self.uptade_mission_goal()
         
         ## scenario where no instructions ##
         ##########
         # if we cant manage to figure out our pos, or dont know where to go
         # then we do nothing  
         # TODO: that means drifting, ideally we would stop
-        if self.goal is None or not self.update_estimate():
+        if self.active_waypoint is None or not self.update_estimate():
             return {"forward": 0.0, "lateral": 0.0, "rotation": 0.0, "grasper": 0}
 
         # maintain current orientation if dont know where to head to
@@ -226,42 +305,38 @@ class MyDroneMapper(DroneAbstract):
     def draw_top_layer(self):
         if self.map:
          arcade.draw_points(list(self.map), (0, 220, 255, 160), 2)
-        if self.goal is None:
+        if self.active_waypoint is None:
             return
 
         # draw a basic circle
-        x, y = self.goal
+        x_active_waypoint, y_active_waypoint = self.active_waypoint
         arcade.draw_circle_outline(
-            center_x=float(x),
-            center_y=float(y),
+            center_x=float(x_active_waypoint),
+            center_y=float(y_active_waypoint),
             radius=8,
             color=(255, 0, 255),
             border_width=2,
         )
 
-    def plot_lidar_map(self):
+        x_mission_goal, y_mission_goal = self.mission_goal
+        arcade.draw_circle_outline(
+                center_x=float(x_mission_goal),
+                center_y=float(y_mission_goal),
+                radius=8,
+                color=(0, 0, 255),
+                border_width=5,
+            )
 
-        if not self.map:
-            return
+        if self.position_ is not None and self.active_waypoint is not None:
+            start = np.asarray(self.position_, dtype=float)
+            delta = np.asarray(self.active_waypoint, dtype=float) - start
+            distance = np.linalg.norm(delta)
 
-        if not hasattr(self, "_map_plot") or not plt.fignum_exists(
-            self._map_plot[0].number
-        ):
-            plt.ion()
-            fig, ax = plt.subplots()
-            points = ax.scatter([], [], s=2, marker="s")
-            ax.set_aspect("equal", adjustable="box")
-            ax.set_xlabel("World x (px)")
-            ax.set_ylabel("World y (px)")
-            self._map_plot = fig, ax, points
-            plt.show(block=False)
-
-        fig, ax, points = self._map_plot
-        pixels = np.asarray(list(self.map))
-        points.set_offsets(pixels)
-        ax.update_datalim(pixels)
-        ax.autoscale_view()
-        ax.set_title(f"Occupied pixels: {len(self.map):,}")
-        fig.canvas.draw_idle()
-        fig.canvas.flush_events()
+            if distance > 0:
+                end = start + delta / distance * min(20.0, distance)
+                arcade.draw_line(
+                    float(start[0]), float(start[1]),
+                    float(end[0]), float(end[1]),
+                    (255, 0, 0), 2,
+                )
 
