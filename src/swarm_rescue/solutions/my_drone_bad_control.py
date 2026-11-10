@@ -13,7 +13,11 @@ class MyDroneBadControl(DroneAbstract):
     def __init__(self, *, goal=None, heading_goal=None, **kwargs):
         super().__init__(**kwargs)
         # if no goal set, return to center of map
-        self.goal = np.asarray((0.0,0.0), dtype=float) if goal is None else np.asarray(goal, dtype=float)
+        self.goal = (
+            np.asarray((0.0, 0.0), dtype=float)
+            if goal is None
+            else np.asarray(goal, dtype=float)
+        )
         self.heading_goal = heading_goal
 
         self.position_ = None
@@ -33,12 +37,12 @@ class MyDroneBadControl(DroneAbstract):
 
     def update_GPS(self):
         """Update GPS
-        
+
         Returns:
             np.array(): x,y GPS position
         """
-        # return self.measured_gps_position()
-        return np.array(self.true_position(), dtype=float)
+        return self.measured_gps_position()
+        # return np.array(self.true_position(), dtype=float)
 
     def update_yaw(self):
         """Update yaw
@@ -46,17 +50,17 @@ class MyDroneBadControl(DroneAbstract):
         Returns:
             float: the yaw in radians
         """
-        # return self.measured_compass_angle()
-        return float(self.true_angle())
+        return self.measured_compass_angle()
+        # return float(self.true_angle())
 
     def update_velocity(self):
         """Update velocity
-        
+
         Returns:
             np.array(): x,y velocity
         """
-        # return self.measured_velocity()
-        return np.array(self.true_velocity(), dtype=float)
+        return self.measured_velocity()
+        # return np.array(self.true_velocity(), dtype=float)
 
     def update_angular_velocity(self):
         """Update angular velocity
@@ -64,8 +68,8 @@ class MyDroneBadControl(DroneAbstract):
         Returns:
             float: the angular velocity in radians per second
         """
-        # return self.measured_angular_velocity()
-        return float(self.true_angular_velocity())
+        return self.measured_angular_velocity()
+        # return float(self.true_angular_velocity())
 
     def update_estimate(self):
         """Functions which updates or not the state variables of our drone
@@ -80,14 +84,16 @@ class MyDroneBadControl(DroneAbstract):
 
     def uptade_goal(self):
         """Functions which updates or not the current goal
-        
+
         Returns:
             boolean: True if we managed to update our goal, False else
         """
         # change goals
-        if self.goal is not None and self.position_ is not None :
+        if self.goal is not None and self.position_ is not None:
             if np.linalg.norm(self.goal - self.position_) < 0.5:
-                self.goal = np.random.uniform(-100, 100, size=2)  # random new goal if close enough
+                self.goal = np.random.uniform(
+                    -100, 100, size=2
+                )  # random new goal if close enough
                 print(f"New goal: {self.goal}")
 
         return True
@@ -102,13 +108,13 @@ class MyDroneBadControl(DroneAbstract):
 
     def compute_grasper(self):
         return 0
-    
+
     def control(self):
         if (
-        self.goal is None
-        or not self.update_estimate()
-        or self.position_ is None
-        or self.yaw_ is None
+            self.goal is None
+            or not self.update_estimate()
+            or self.position_ is None
+            or self.yaw_ is None
         ):
             return {"forward": 0.0, "lateral": 0.0, "rotation": 0.0, "grasper": 0}
         self.uptade_goal()
@@ -147,4 +153,3 @@ class MyDroneBadControl(DroneAbstract):
             color=(255, 0, 255),
             border_width=2,
         )
-    

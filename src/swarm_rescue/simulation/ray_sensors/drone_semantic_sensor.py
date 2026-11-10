@@ -18,7 +18,9 @@ from swarm_rescue.simulation.elements.normal_wall import NormalWall, NormalBox
 from swarm_rescue.simulation.elements.rescue_center import RescueCenter
 from swarm_rescue.simulation.elements.wounded_person import WoundedPerson
 from swarm_rescue.simulation.utils.constants import (
-    RESOLUTION_SEMANTIC_SENSOR, MAX_RANGE_SEMANTIC_SENSOR, FOV_SEMANTIC_SENSOR
+    RESOLUTION_SEMANTIC_SENSOR,
+    MAX_RANGE_SEMANTIC_SENSOR,
+    FOV_SEMANTIC_SENSOR,
 )
 
 if TYPE_CHECKING:
@@ -43,17 +45,23 @@ class DroneSemanticSensor(SemanticSensor):
         """
         Type of the entity detected.
         """
+
         WALL = auto()
         WOUNDED_PERSON = auto()
         RESCUE_CENTER = auto()
         DRONE = auto()
         OTHER = auto()
 
-    Data = namedtuple("Data",
-                      "distance angle entity_type grasped")
+    Data = namedtuple("Data", "distance angle entity_type grasped")
 
-    def __init__(self, playground: Optional[Playground], noise: bool = True,
-                 invisible_elements=None, rng=None, **kwargs):
+    def __init__(
+        self,
+        playground: Optional[Playground],
+        noise: bool = True,
+        invisible_elements=None,
+        rng=None,
+        **kwargs,
+    ):
         """
         Initialize the DroneSemanticSensor.
 
@@ -65,13 +73,15 @@ class DroneSemanticSensor(SemanticSensor):
             noise. None (the default) comes from the global numpy RNG.
             **kwargs: Additional keyword arguments.
         """
-        super().__init__(normalize=False,
-                         resolution=RESOLUTION_SEMANTIC_SENSOR,
-                         max_range=MAX_RANGE_SEMANTIC_SENSOR,
-                         fov=FOV_SEMANTIC_SENSOR,
-                         invisible_elements=invisible_elements,
-                         invisible_when_grasped=True,
-                         **kwargs)
+        super().__init__(
+            normalize=False,
+            resolution=RESOLUTION_SEMANTIC_SENSOR,
+            max_range=MAX_RANGE_SEMANTIC_SENSOR,
+            fov=FOV_SEMANTIC_SENSOR,
+            invisible_elements=invisible_elements,
+            invisible_when_grasped=True,
+            **kwargs,
+        )
 
         self._playground: Optional[Playground] = playground
         self._noise = noise
@@ -80,20 +90,20 @@ class DroneSemanticSensor(SemanticSensor):
 
         # 'ray_angles' is an array which contains the angles of the laser rays
         # of the sensor
-        self.ray_angles = compute_ray_angles(fov_rad=self.fov_rad(),
-                                             nb_rays=self.resolution)
+        self.ray_angles = compute_ray_angles(
+            fov_rad=self.fov_rad(), nb_rays=self.resolution
+        )
 
         self.entity_colors = {
             WoundedPerson: (179, 143, 0, 255),
             RescueCenter: (255, 64, 64, 255),
             Agent: (64, 64, 255, 255),
-            DroneBase: (64, 64, 255, 255)
+            DroneBase: (64, 64, 255, 255),
         }
 
-        null_data = self.Data(distance=np.nan,
-                              angle=np.nan,
-                              entity_type=np.nan,
-                              grasped=False)
+        null_data = self.Data(
+            distance=np.nan, angle=np.nan, entity_type=np.nan, grasped=False
+        )
         self._null_sensor = [null_data] * self.resolution
 
         self._values = self._default_value
@@ -129,7 +139,7 @@ class DroneSemanticSensor(SemanticSensor):
             try:
                 assert self._playground is not None
                 entity = self._playground.get_entity_from_uid(id_detection)
-            except KeyError:
+            except (KeyError, AssertionError):
                 # Skip invalid entity IDs (e.g., background colors in xvfb)
                 continue
 
@@ -159,10 +169,9 @@ class DroneSemanticSensor(SemanticSensor):
             if entity_type == self.TypeEntity.WALL:
                 continue
 
-            new_detection = self.Data(distance=distance,
-                                      angle=angle,
-                                      entity_type=entity_type,
-                                      grasped=grasped)
+            new_detection = self.Data(
+                distance=distance, angle=angle, entity_type=entity_type, grasped=grasped
+            )
             new_values.append(new_detection)
 
         self._values = new_values
@@ -226,10 +235,12 @@ class DroneSemanticSensor(SemanticSensor):
         np.clip(distances, 0.0, None, out=distances)
 
         self._values = [
-            self.Data(distance=distance,
-                      angle=data.angle,
-                      entity_type=data.entity_type,
-                      grasped=data.grasped)
+            self.Data(
+                distance=distance,
+                angle=data.angle,
+                entity_type=data.entity_type,
+                grasped=data.grasped,
+            )
             for distance, data in zip(distances, self._values)
         ]
 
@@ -265,12 +276,12 @@ class DroneSemanticSensor(SemanticSensor):
 
         shapes = arcade.shape_list.ShapeElementList()
 
-        for (view, center, id_detect) in zip(view_xy, center_xy, id_detection):
+        for view, center, id_detect in zip(view_xy, center_xy, id_detection):
             if id_detect != 0:
                 try:
                     assert self._playground is not None
                     entity = self._playground.get_entity_from_uid(id_detect)
-                except KeyError as error:
+                except (KeyError, AssertionError) as error:
                     exc_tb = sys.exc_info()[2]
                     if exc_tb is not None:
                         fname = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
@@ -281,7 +292,9 @@ class DroneSemanticSensor(SemanticSensor):
             else:
                 color = (204, 204, 204, 255)
 
-            line = arcade.shape_list.create_line(center[0], center[1], view[0], view[1], color, line_width=1)
+            line = arcade.shape_list.create_line(
+                center[0], center[1], view[0], view[1], color, line_width=1
+            )
             shapes.append(line)
 
         shapes.draw()
