@@ -235,6 +235,7 @@ class Launcher:
         my_gui = GuiSR(the_map=the_map,
                        draw_interactive=False,
                        filename_video_capture=filename_video_capture,
+                       draw_lidar_rays=True,
                        headless=headless)
 
         window_title = (f"Team: {self.team_info.team_number_str}   -   "
