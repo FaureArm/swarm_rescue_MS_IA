@@ -1,18 +1,22 @@
-from swarm_rescue.solutions.my_drone_random import MyDroneRandom
-from swarm_rescue.solutions.my_drone_lidar_communication import MyDroneLidarCommunication
-from swarm_rescue.solutions.my_drone_motionless import MyDroneMotionless
-from swarm_rescue.solutions.my_drone_basic_control import MyDroneBasicControl
-from swarm_rescue.solutions.my_drone_map_building import MyDroneMapper
+from swarm_rescue.solutions.control import PDController
+from swarm_rescue.solutions.drone import RescueDrone
+from swarm_rescue.solutions.localisation import MeasuredState
+from swarm_rescue.solutions.mapping import LidarMapper
+from swarm_rescue.solutions.mission_planner import WaypointMission
 
 
-class MyDroneEval(MyDroneMapper):
-    """
-    Evaluation drone class that inherits from MyDroneRandom.
+def waypoint_components(*, mapping=False, goal=None, heading_goal=None):
+    # initialise components for waypoint flight, with optional mapping
+    return {
+        "estimator": MeasuredState(),
+        "mission": WaypointMission(goal=goal, arrival_threshold=1 if mapping else 0.5),
+        "controller": PDController(heading_goal=heading_goal),
+        "mapper": LidarMapper() if mapping else None,
+    }
 
-    This class can be extended to implement custom evaluation logic.
-    """
 
+class MyDroneEval(RescueDrone):
     def __init__(self, **kwargs):
-        super().__init__(goal=(150.0, 100.0), **kwargs)
-
-
+        super().__init__(
+            **waypoint_components(mapping=True, goal=(150.0, 100.0)), **kwargs
+        )
