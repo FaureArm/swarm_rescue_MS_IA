@@ -39,6 +39,19 @@ class LidarMapper:
 
         return pixels
 
+    def get_lidar_empties(self, drone_position, yaw, ranges, angles):
+        if ranges is None:
+            return np.empty((0, 2), dtype=int)
+
+        ranges = np.asarray(ranges)
+        angles = np.asarray(angles)
+        # we get rays that are of beyond the max range
+        valid = np.isfinite(ranges) & (ranges > self.max_lidar_range_)
+
+        bearings = yaw + angles[valid]
+        directions = np.column_stack((np.cos(bearings), np.sin(bearings)))
+        empties = drone_position + self.max_lidar_range_ * directions
+        return np.rint(empties).astype(int)
 
 
     def update_lidar_map(self, drone_position, yaw, ranges, angles):
@@ -63,18 +76,20 @@ class LidarMapper:
         """_summary_
 
         """
+
+        drone_x, drone_y = np.rint(drone_position).astype(int)
+
         # we know positive hits
         pixels = self.get_lidar_hits(drone_position, yaw, ranges, angles)
         # however, we also want to use the fact that in-between pixels
         # were empty, so we need to calculate a line between our drone and the
         # pixels positive hits
 
-
         for pixel in pixels:
             # calculate pixels composing the line between drone
             # and pixel hit
             # TODO: uses a very basic line drawing algo, can be upgraded, but see if necessary
-            drone_x, drone_y = np.rint(drone_position).astype(int)
+            
             rows, cols = line(drone_y, drone_x, pixel[1], pixel[0])
 
             # Free pixels: exclude the endpoint
@@ -82,4 +97,13 @@ class LidarMapper:
 
             # Occupied pixel: endpoint only
             self.occupancy_grid_.update_log_odds(cols[-1], rows[-1], pos_hit=True)
+            # TODO: update timestep
+        
+
+        # we also need to check empty spaces
+        empty_endpoints = self.get_lidar_empties(drone_position, yaw, ranges, angles)
+        for end_x, end_y in empty_endpoints:
+            rows, cols = line(drone_y, drone_x, end_y, end_x)
+
+            self.occupancy_grid_.update_log_odds(cols, rows, pos_hit=False)
             # TODO: update timestep
