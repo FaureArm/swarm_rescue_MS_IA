@@ -25,6 +25,8 @@ class RescueDrone(DroneAbstract):
             ranges = self.lidar_values() #TODO: replace with a getter, so that we can apply kalman filtering later
             angles = self.lidar_rays_angles() if ranges is not None else None
             self.mapper.update_lidar_map(drone_position, yaw, ranges, angles)
+            self.mapper.update_occupancy_grid(drone_position, yaw, ranges, angles, self.elapsed_timestep)
+            self.debug_draw.plot_occupancy_grid()
 
         decision = self.mission.decide(self.estimator.position_)
 

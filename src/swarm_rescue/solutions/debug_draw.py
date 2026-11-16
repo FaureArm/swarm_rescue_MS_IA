@@ -14,7 +14,7 @@ class DebugDraw:
 
     @property
     def map(self):
-        return self.mapper.map if self.mapper is not None else None
+        return self.mapper.lidar_map_ if self.mapper is not None else None
 
     def draw_top_layer(self):
         if self.map:
@@ -58,4 +58,46 @@ class DebugDraw:
         ax.set_title(f"Occupied pixels: {len(self.map):,}")
         fig.canvas.draw_idle()
         fig.canvas.flush_events()
+
+    def plot_occupancy_grid(self):
+        """Create or refresh a separate, nonblocking occupancy-map window.
+
+        Log odds in [-0.1, 0.1] are gray, lower values white (free),
+        and higher values black (occupied). Axes show grid indices.
+        """
+        if self.mapper is None:
+            return None
+
+        # OccupancyGrid currently stores its values as [x, y]; imshow uses [y, x].
+        values = self.mapper.occupancy_grid_.log_odds.T
+        pixels = np.full(values.shape, 0.5, dtype=np.float32)
+        pixels[values < -0.1] = 1.0
+        pixels[values > 0.1] = 0.0
+        height, width = pixels.shape
+        extent = (-0.5, width - 0.5, -0.5, height - 0.5)
+
+        if not hasattr(self, "_occupancy_plot") or not plt.fignum_exists(
+            self._occupancy_plot[0].number
+        ):
+            plt.ion()
+            fig, ax = plt.subplots()
+            image = ax.imshow(
+                pixels, cmap="gray", vmin=0, vmax=1, origin="lower",
+                interpolation="nearest", extent=extent,
+            )
+            ax.set_aspect("equal")
+            ax.set_xlabel("Grid x (px)")
+            ax.set_ylabel("Grid y (px)")
+            ax.set_title("Occupancy grid (gray: unknown, white: free, black: occupied)")
+            self._occupancy_plot = fig, ax, image
+            plt.show(block=False)
+
+        fig, ax, image = self._occupancy_plot
+        image.set_data(pixels)
+        image.set_extent(extent)
+        ax.set_xlim(extent[:2])
+        ax.set_ylim(extent[2:])
+        fig.canvas.draw_idle()
+        fig.canvas.flush_events()
+        return fig
 
