@@ -30,12 +30,13 @@ class OccupancyGrid:
     add getters and setters ?
     """
     def __init__(self, width = 2000, height = 2000, pos_hit_increment = 0.5, neg_hit_increment = 0.5):
-        self.log_odds = np.zeros((width, height), dtype=np.float32)
-        self.last_observed = np.full(
-            (width, height), -np.inf, dtype=np.float64
-        )
-        self.width = width
-        self.height = height
+        self.width = width + 100 # padding for values outside due to noise
+        self.height = height + 100
+
+        # arrays holding our values
+        self.log_odds = np.zeros((self.width, self.height), dtype=np.float32)
+        self.last_observed = np.full((self.width, self.height), -np.inf, dtype=np.float64)
+        
         self.log_odd_plus = pos_hit_increment
         self.log_odd_minus = neg_hit_increment
 

@@ -3,10 +3,21 @@ from swarm_rescue.solutions import data_types as dt
 from skimage.draw import line
 
 class LidarMapper:
-    def __init__(self):
+    def __init__(self, map_size = (2000, 2000)):
         self.lidar_map_= set() # map holding hard pixels. Set to easily handle duplicates
-        self.occupancy_grid_ = dt.OccupancyGrid() # occupancy grid to hold probabilistic map #TODO initalise with max map size
+        self.occupancy_grid_ = dt.OccupancyGrid(*map_size)
         self.max_lidar_range_ = 275 # max lidar range in pixelsS
+        self.map_size_ = map_size
+
+    def set_map_size(self, map_size):
+        """Set the playground dimensions and recreate the grid before mapping starts."""
+        self.map_size_ = map_size
+        self.occupancy_grid_ = dt.OccupancyGrid(
+            *map_size,
+            pos_hit_increment=self.occupancy_grid_.log_odd_plus,
+            neg_hit_increment=self.occupancy_grid_.log_odd_minus,
+        )
+
     def get_lidar_hits(self, drone_position, yaw, ranges, angles):
         """get the lidar hits, as pixels. Only returns positive hits !
 

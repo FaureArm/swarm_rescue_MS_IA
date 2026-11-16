@@ -10,6 +10,8 @@ class RescueDrone(DroneAbstract):
         self.mission = mission
         self.controller = controller
         self.mapper = mapper
+        if self.mapper is not None and self.size_area is not None:
+            self.mapper.set_map_size(self.size_area)
         self.debug_draw = DebugDraw(mission, mapper)
         # NB: later could add attributes to define role
 
@@ -26,7 +28,9 @@ class RescueDrone(DroneAbstract):
             angles = self.lidar_rays_angles() if ranges is not None else None
             self.mapper.update_lidar_map(drone_position, yaw, ranges, angles)
             self.mapper.update_occupancy_grid(drone_position, yaw, ranges, angles, self.elapsed_timestep)
-            self.debug_draw.plot_occupancy_grid()
+            # only show occupancy grid map for a single drone
+            if self.identifier == 0:
+                self.debug_draw.plot_occupancy_grid()
 
         decision = self.mission.decide(self.estimator.position_)
 
