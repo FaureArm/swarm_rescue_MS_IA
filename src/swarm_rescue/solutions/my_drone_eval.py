@@ -3,9 +3,11 @@ from swarm_rescue.solutions.my_drone_lidar_communication import MyDroneLidarComm
 from swarm_rescue.solutions.my_drone_motionless import MyDroneMotionless
 from swarm_rescue.solutions.my_drone_basic_control import MyDroneBasicControl
 from swarm_rescue.solutions.my_drone_map_building import MyDroneMapper
+from swarm_rescue.solutions.my_drone_control_and_rescue import MyDroneControlAndRescue
+from swarm_rescue.solutions.my_smart_drone import MySmartDrone
 
 
-class MyDroneEval(MyDroneMapper):
+class MyDroneEval(MyDroneControlAndRescue):
     """
     Evaluation drone class that inherits from MyDroneRandom.
 
@@ -13,6 +15,6 @@ class MyDroneEval(MyDroneMapper):
     """
 
     def __init__(self, **kwargs):
-        super().__init__(goal=(150.0, 100.0), **kwargs)
+        super().__init__(goal=(150.0,100.0), **kwargs)
 
 
