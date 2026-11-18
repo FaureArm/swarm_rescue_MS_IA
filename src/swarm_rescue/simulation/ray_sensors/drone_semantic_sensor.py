@@ -129,7 +129,7 @@ class DroneSemanticSensor(SemanticSensor):
             try:
                 assert self._playground is not None
                 entity = self._playground.get_entity_from_uid(id_detection)
-            except KeyError:
+            except (KeyError, AssertionError):
                 # Skip invalid entity IDs (e.g., background colors in xvfb)
                 continue
 
@@ -270,7 +270,7 @@ class DroneSemanticSensor(SemanticSensor):
                 try:
                     assert self._playground is not None
                     entity = self._playground.get_entity_from_uid(id_detect)
-                except KeyError as error:
+                except (KeyError, AssertionError) as error:
                     exc_tb = sys.exc_info()[2]
                     if exc_tb is not None:
                         fname = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
