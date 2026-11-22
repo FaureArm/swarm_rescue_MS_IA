@@ -3,11 +3,15 @@ from swarm_rescue.solutions import data_types as dt
 from skimage.draw import line
 
 class LidarMapper:
+
+    FRONTIER_UPDATE_INTERVAL = 10
+
     def __init__(self, map_size = (2000, 2000)):
         self.lidar_map_= set() # map holding hard pixels. Set to easily handle duplicates
         self.occupancy_grid_ = dt.OccupancyGrid(*map_size)
         self.max_lidar_range_ = 275 # max lidar range in pixelsS
         self.map_size_ = map_size
+        self.frontier_mask_ = None
 
     def set_map_size(self, map_size):
         """Set the playground dimensions and recreate the grid before mapping starts."""
@@ -17,6 +21,7 @@ class LidarMapper:
             pos_hit_increment=self.occupancy_grid_.log_odd_plus,
             neg_hit_increment=self.occupancy_grid_.log_odd_minus,
         )
+        self.frontier_mask_ = None
 
     def get_lidar_hits(self, drone_position, yaw, ranges, angles):
         """get the lidar hits, as pixels. Only returns positive hits !
@@ -109,3 +114,7 @@ class LidarMapper:
             self.occupancy_grid_.update_log_odds(
                 cols, rows, pos_hit=False, timestep=timestep,
             )
+
+        # update frontier mask
+        if self.frontier_mask_ is None or timestep % self.FRONTIER_UPDATE_INTERVAL == 0:
+            self.frontier_mask_ = self.occupancy_grid_.frontier_mask()

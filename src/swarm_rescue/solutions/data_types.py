@@ -118,4 +118,25 @@ class OccupancyGrid:
 
         return states
 
-    
+
+    def frontier_mask(self):
+        """Return unknown cells adjacent to free space using four neighbors."""
+        states = self.classify_cells()
+
+        # create boolean arrays of same size as occupancy grid
+        free = states == self.FREE
+        unknown = states == self.UNKNOWN
+
+        # create an all-False boolean array with the same shape as the grid
+        has_free_neighbor = np.zeros_like(free)
+
+        # boolean mask of neighbors along x
+        has_free_neighbor[1:, :] |= free[:-1, :] # x+1
+        has_free_neighbor[:-1, :] |= free[1:, :] # x-1
+
+        #  boolean mask of neighbors along y
+        has_free_neighbor[:, 1:] |= free[:, :-1] #y+1
+        has_free_neighbor[:, :-1] |= free[:, 1:] #y-1
+
+        # rreturn a boolean mask where true means frontier cell
+        return unknown & has_free_neighbor

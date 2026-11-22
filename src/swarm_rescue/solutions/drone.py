@@ -29,8 +29,8 @@ class RescueDrone(DroneAbstract):
             self.mapper.update_lidar_map(drone_position, yaw, ranges, angles)
             self.mapper.update_occupancy_grid(drone_position, yaw, ranges, angles, self.elapsed_timestep)
             # only show occupancy grid map for a single drone
-            #if self.identifier == 0:
-             #   self.debug_draw.plot_occupancy_grid()
+            if self.identifier == 0:
+                self.debug_draw.plot_occupancy_grid()
 
         decision = self.mission.decide(self.estimator.position_)
 

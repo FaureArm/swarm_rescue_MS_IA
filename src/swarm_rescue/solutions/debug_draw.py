@@ -63,7 +63,8 @@ class DebugDraw:
         """Create or refresh a separate, nonblocking occupancy-map window.
 
         Unknown cells are gray, uncertain cells light gray, free cells white,
-        and occupied cells black. Axes show grid indices.
+        and occupied cells black. Cached frontier cells are green.
+        Axes show grid indices.
         """
         if self.mapper is None:
             return None
@@ -71,11 +72,18 @@ class DebugDraw:
         # OccupancyGrid currently stores its values as [x, y]; imshow uses [y, x].
         grid = self.mapper.occupancy_grid_
         states = grid.classify_cells().T
-        pixels = np.full(states.shape, 0.5, dtype=np.float32)
+        height, width = states.shape
+        pixels = np.full((height, width, 3), 0.5, dtype=np.float32)
         pixels[states == grid.UNCERTAIN] = 0.75
         pixels[states == grid.FREE] = 1.0
         pixels[states == grid.OCCUPIED] = 0.0
-        height, width = pixels.shape
+
+        frontiers = self.mapper.frontier_mask_
+        if frontiers is not None:
+            # A cached frontier may have been observed since its last refresh.
+            visible_frontiers = frontiers.T & (states == grid.UNKNOWN)
+            pixels[visible_frontiers] = (0.0, 1.0, 0.0)
+
         extent = (-0.5, width - 0.5, -0.5, height - 0.5)
 
         if not hasattr(self, "_occupancy_plot") or not plt.fignum_exists(
@@ -84,15 +92,15 @@ class DebugDraw:
             plt.ion()
             fig, ax = plt.subplots()
             image = ax.imshow(
-                pixels, cmap="gray", vmin=0, vmax=1, origin="lower",
+                pixels, origin="lower",
                 interpolation="nearest", extent=extent,
             )
             ax.set_aspect("equal")
             ax.set_xlabel("Grid x (px)")
             ax.set_ylabel("Grid y (px)")
             ax.set_title(
-                "Occupancy grid (gray: unknown, light gray: uncertain, "
-                "white: free, black: occupied)"
+                "Occupancy grid (gray: unknown, light gray: uncertain,\n"
+                "white: free, black: occupied, green: frontiers)"
             )
             self._occupancy_plot = fig, ax, image
             plt.show(block=False)
