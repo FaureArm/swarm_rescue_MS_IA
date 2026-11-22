@@ -62,17 +62,18 @@ class DebugDraw:
     def plot_occupancy_grid(self):
         """Create or refresh a separate, nonblocking occupancy-map window.
 
-        Log odds in [-0.1, 0.1] are gray, lower values white (free),
-        and higher values black (occupied). Axes show grid indices.
+        Unknown cells are gray, free cells white, and occupied cells black.
+        Axes show grid indices.
         """
         if self.mapper is None:
             return None
 
         # OccupancyGrid currently stores its values as [x, y]; imshow uses [y, x].
-        values = self.mapper.occupancy_grid_.log_odds.T
-        pixels = np.full(values.shape, 0.5, dtype=np.float32)
-        pixels[values < -0.1] = 1.0
-        pixels[values > 0.1] = 0.0
+        grid = self.mapper.occupancy_grid_
+        states = grid.classify_cells().T
+        pixels = np.full(states.shape, 0.5, dtype=np.float32)
+        pixels[states == grid.FREE] = 1.0
+        pixels[states == grid.OCCUPIED] = 0.0
         height, width = pixels.shape
         extent = (-0.5, width - 0.5, -0.5, height - 0.5)
 
