@@ -36,6 +36,7 @@ class OccupancyGrid:
     UNKNOWN = 0
     FREE = 1
     OCCUPIED = 2
+    UNCERTAIN = 3
 
     FREE_THRESHOLD = -0.1
     OCCUPIED_THRESHOLD = 0.1
@@ -51,8 +52,11 @@ class OccupancyGrid:
         self.log_odd_plus = pos_hit_increment
         self.log_odd_minus = neg_hit_increment
 
-    def update_log_odds(self, x, y, pos_hit):
-        """Update valid cells; return whether any cells were updated."""
+    def update_log_odds(self, x, y, pos_hit, timestep):
+        """Update evidence and observation time for valid cells."""
+        if not np.isfinite(timestep) or timestep < 0:
+            raise ValueError("Observation timestep must be finite and nonnegative")
+
         grid_x, grid_y, in_bounds = self.world_to_grid(x, y)
 
         if not np.any(in_bounds):
@@ -68,6 +72,7 @@ class OccupancyGrid:
             self.MIN_LOG_ODDS,
             self.MAX_LOG_ODDS,
         )
+        self.last_observed[indices] = timestep
 
         return True
 
@@ -99,15 +104,17 @@ class OccupancyGrid:
         return grid_x, grid_y, in_bounds
 
     def classify_cells(self):
-        """Return cell labels in the grid's existing [x, y] layout."""
+        """Label unseen cells UNKNOWN and observed, ambiguous cells UNCERTAIN."""
         states = np.full(
             self.log_odds.shape,
             self.UNKNOWN,
             dtype=np.uint8,
         )
 
-        states[self.log_odds < self.FREE_THRESHOLD] = self.FREE
-        states[self.log_odds > self.OCCUPIED_THRESHOLD] = self.OCCUPIED
+        observed = np.isfinite(self.last_observed)
+        states[observed] = self.UNCERTAIN
+        states[observed & (self.log_odds < self.FREE_THRESHOLD)] = self.FREE
+        states[observed & (self.log_odds > self.OCCUPIED_THRESHOLD)] = self.OCCUPIED
 
         return states
 

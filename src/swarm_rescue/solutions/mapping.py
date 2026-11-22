@@ -73,9 +73,7 @@ class LidarMapper:
                     self.lidar_map_.add((x + dx, y + dy)) #adds coords of pixel. Set auto handles dupes
 
     def update_occupancy_grid(self, drone_position, yaw, ranges, angles, timestep):
-        """_summary_
-
-        """
+        """Update ray evidence and record the simulation timestep for observed cells."""
 
         drone_x, drone_y = np.rint(drone_position).astype(int)
 
@@ -93,11 +91,14 @@ class LidarMapper:
             rows, cols = line(drone_y, drone_x, pixel[1], pixel[0])
 
             # Free pixels: exclude the endpoint
-            self.occupancy_grid_.update_log_odds(cols[:-1], rows[:-1], pos_hit=False)
+            self.occupancy_grid_.update_log_odds(
+                cols[:-1], rows[:-1], pos_hit=False, timestep=timestep,
+            )
 
             # Occupied pixel: endpoint only
-            self.occupancy_grid_.update_log_odds(cols[-1], rows[-1], pos_hit=True)
-            # TODO: update timestep
+            self.occupancy_grid_.update_log_odds(
+                cols[-1], rows[-1], pos_hit=True, timestep=timestep,
+            )
         
 
         # we also need to check empty spaces
@@ -105,5 +106,6 @@ class LidarMapper:
         for end_x, end_y in empty_endpoints:
             rows, cols = line(drone_y, drone_x, end_y, end_x)
 
-            self.occupancy_grid_.update_log_odds(cols, rows, pos_hit=False)
-            # TODO: update timestep
+            self.occupancy_grid_.update_log_odds(
+                cols, rows, pos_hit=False, timestep=timestep,
+            )

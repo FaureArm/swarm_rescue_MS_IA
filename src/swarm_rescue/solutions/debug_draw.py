@@ -62,8 +62,8 @@ class DebugDraw:
     def plot_occupancy_grid(self):
         """Create or refresh a separate, nonblocking occupancy-map window.
 
-        Unknown cells are gray, free cells white, and occupied cells black.
-        Axes show grid indices.
+        Unknown cells are gray, uncertain cells light gray, free cells white,
+        and occupied cells black. Axes show grid indices.
         """
         if self.mapper is None:
             return None
@@ -72,6 +72,7 @@ class DebugDraw:
         grid = self.mapper.occupancy_grid_
         states = grid.classify_cells().T
         pixels = np.full(states.shape, 0.5, dtype=np.float32)
+        pixels[states == grid.UNCERTAIN] = 0.75
         pixels[states == grid.FREE] = 1.0
         pixels[states == grid.OCCUPIED] = 0.0
         height, width = pixels.shape
@@ -89,7 +90,10 @@ class DebugDraw:
             ax.set_aspect("equal")
             ax.set_xlabel("Grid x (px)")
             ax.set_ylabel("Grid y (px)")
-            ax.set_title("Occupancy grid (gray: unknown, white: free, black: occupied)")
+            ax.set_title(
+                "Occupancy grid (gray: unknown, light gray: uncertain, "
+                "white: free, black: occupied)"
+            )
             self._occupancy_plot = fig, ax, image
             plt.show(block=False)
 
