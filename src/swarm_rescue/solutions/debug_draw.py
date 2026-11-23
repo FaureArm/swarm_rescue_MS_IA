@@ -64,6 +64,7 @@ class DebugDraw:
 
         Unknown cells are gray, uncertain cells light gray, free cells white,
         and occupied cells black. Cached frontier cells are green.
+        Orange circles mark candidate waypoints; a magenta star marks the goal.
         Axes show grid indices.
         """
         if self.mapper is None:
@@ -102,12 +103,29 @@ class DebugDraw:
                 "Occupancy grid (gray: unknown, light gray: uncertain,\n"
                 "white: free, black: occupied, green: frontiers)"
             )
-            self._occupancy_plot = fig, ax, image
+            candidates = ax.scatter(
+                [], [], s=40, marker="o", facecolors="none",
+                edgecolors="darkorange", linewidths=1.5,
+                label="Candidate waypoints", zorder=3,
+            )
+            selected = ax.scatter(
+                [], [], s=100, marker="*", color="magenta",
+                edgecolors="black", linewidths=0.5,
+                label="Selected waypoint", zorder=4,
+            )
+            ax.legend(loc="upper right")
+            self._occupancy_plot = fig, ax, image, candidates, selected
             plt.show(block=False)
 
-        fig, ax, image = self._occupancy_plot
+        fig, ax, image, candidates, selected = self._occupancy_plot
         image.set_data(pixels)
         image.set_extent(extent)
+        origin = np.array([grid.width // 2, grid.height // 2])
+        candidates.set_offsets(self.mapper.frontier_waypoints_ + origin)
+        selected.set_offsets(
+            np.empty((0, 2)) if self.goal is None
+            else np.asarray(self.goal, dtype=float).reshape(1, 2) + origin
+        )
         ax.set_xlim(extent[:2])
         ax.set_ylim(extent[2:])
         fig.canvas.draw_idle()

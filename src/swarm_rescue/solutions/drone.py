@@ -13,14 +13,13 @@ class RescueDrone(DroneAbstract):
         if self.mapper is not None and self.size_area is not None:
             self.mapper.set_map_size(self.size_area)
         self.debug_draw = DebugDraw(mission, mapper)
-        # NB: later could add attributes to define role
+        # NB: later could add attributes to define role -> done in mission planner, 
 
     def define_message_for_all(self) -> None:
         return None
 
     def control(self) -> CommandsDict:
-        # Preserve the mapping test's true pose inputs and read order, before
-        # waypoint selection and measured-pose updates. The guard is unchanged.
+        # Mapping experiments continue using the existing true-pose inputs.
         if self.mapper is not None:
             drone_position = self.true_position()
             yaw = self.true_angle()
@@ -28,16 +27,31 @@ class RescueDrone(DroneAbstract):
             angles = self.lidar_rays_angles() if ranges is not None else None
             self.mapper.update_lidar_map(drone_position, yaw, ranges, angles)
             self.mapper.update_occupancy_grid(drone_position, yaw, ranges, angles, self.elapsed_timestep)
-            # only show occupancy grid map for a single drone
-            if self.identifier == 0:
-                self.debug_draw.plot_occupancy_grid()
+
+        # keep updating pose and such, and applying safety if no measures
+        # TODO: Keep this in a dedicated function to repeat it more often?
+        estimate_updated = self.estimator.update_estimate(
+            self.get_GPS(), self.get_yaw(), self.get_velocity()
+        )
+        if (
+            not estimate_updated
+            or self.estimator.position_ is None
+            or self.estimator.yaw_ is None
+            or self.estimator.velocity_ is None
+        ):
+            return {"forward": 0.0, "lateral": 0.0, "rotation": 0.0, "grasper": 0}
 
         decision = self.mission.decide(self.estimator.position_)
 
-        # Keep the original no-goal short circuit and direct sensor estimates.
-        if decision.destination is None or not self.estimator.update_estimate(
-            self.get_GPS(), self.get_yaw(), self.get_velocity()
+        # update occupancy grid plot
+        if (
+            self.mapper is not None
+            and self.identifier == 0
+            and self.elapsed_timestep % self.mapper.FRONTIER_UPDATE_INTERVAL == 0
         ):
+            pass#self.debug_draw.plot_occupancy_grid()
+
+        if decision.destination is None:
             return {"forward": 0.0, "lateral": 0.0, "rotation": 0.0, "grasper": 0}
 
         # Direct-to-target flight until a working Navigator is introduced.
