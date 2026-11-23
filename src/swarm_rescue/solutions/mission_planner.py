@@ -44,3 +44,39 @@ class WaypointMission:
     def compute_grasper(self):
         return 0
 
+
+class FrontierExplorationMission:
+    """Refresh exploration goals when frontiers change or the goal is reached."""
+    def __init__(
+        self, *, mapper, arrival_threshold=5.0,
+        minimum_cluster_size=50, minimum_distance=50.0,
+    ):
+        self.mapper = mapper
+        self.goal = None
+        self.arrival_threshold = arrival_threshold
+        self.minimum_cluster_size = minimum_cluster_size
+        self.minimum_distance = minimum_distance
+        self.role = "exploration"
+        self._last_frontier_mask = None # hold frontier masks for effenciency
+
+    def decide(self, position) -> MissionDecision:
+        if position is None:
+            return MissionDecision(None, 0)
+
+        frontier_mask = self.mapper.frontier_mask_
+        frontiers_updated = frontier_mask is not self._last_frontier_mask
+
+        goal_reached = (
+            self.goal is not None
+            and np.linalg.norm(self.goal - position) < self.arrival_threshold
+        )
+
+        if frontiers_updated or goal_reached:
+            self.goal = self.mapper.select_exploration_waypoint(
+                position,
+                minimum_cluster_size=self.minimum_cluster_size,
+                minimum_distance=self.minimum_distance,
+            )
+
+        self._last_frontier_mask = frontier_mask
+        return MissionDecision(self.goal, 0)
