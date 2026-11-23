@@ -5,15 +5,16 @@ from skimage.measure import label, regionprops
 
 class LidarMapper:
 
-    FRONTIER_UPDATE_INTERVAL = 100
+    #FRONTIER_UPDATE_INTERVAL = 100
 
-    def __init__(self, map_size = (2000, 2000)):
+    def __init__(self, map_size = (2000, 2000), frontier_update_interval = 100):
         self.lidar_map_= set() # map holding hard pixels. Set to easily handle duplicates
         self.occupancy_grid_ = dt.OccupancyGrid(*map_size)
         self.max_lidar_range_ = 275 # max lidar range in pixelsS
         self.map_size_ = map_size
         self.frontier_mask_ = None
         self.frontier_waypoints_ = np.empty((0, 2), dtype=float)
+        self.frontier_update_interval_ = frontier_update_interval
 
     def set_map_size(self, map_size):
         """Set the playground dimensions and recreate the grid before mapping starts."""
@@ -119,7 +120,7 @@ class LidarMapper:
             )
 
         # update frontier mask
-        if self.frontier_mask_ is None or timestep % self.FRONTIER_UPDATE_INTERVAL == 0:
+        if self.frontier_mask_ is None or timestep % self.frontier_update_interval_ == 0:
             self.frontier_mask_ = self.occupancy_grid_.frontier_mask()
 
 

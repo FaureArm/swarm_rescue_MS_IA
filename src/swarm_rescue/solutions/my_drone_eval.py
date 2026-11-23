@@ -28,7 +28,7 @@ def waypoint_components(*, mapping=False, goal=None, heading_goal=None):
 
 
 def exploration_components(*, heading_goal=None):
-    mapper = LidarMapper()
+    mapper = LidarMapper( frontier_update_interval=FRONTIER_UPDATE_INTERVAL)
     return {
         "estimator": MeasuredState(),
         "mission": FrontierExplorationMission(mapper = mapper, 

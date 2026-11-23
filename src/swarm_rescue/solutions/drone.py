@@ -47,9 +47,9 @@ class RescueDrone(DroneAbstract):
         if (
             self.mapper is not None
             and self.identifier == 0
-            and self.elapsed_timestep % self.mapper.FRONTIER_UPDATE_INTERVAL == 0
+            and self.elapsed_timestep % 10 == 0
         ):
-            pass#self.debug_draw.plot_occupancy_grid()
+            self.debug_draw.plot_occupancy_grid()
 
         if decision.destination is None:
             return {"forward": 0.0, "lateral": 0.0, "rotation": 0.0, "grasper": 0}
