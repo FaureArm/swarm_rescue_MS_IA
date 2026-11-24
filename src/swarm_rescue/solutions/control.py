@@ -7,7 +7,7 @@ from swarm_rescue.simulation.utils.utils import normalize_angle
 class PDController:
     # gains, to adjust/test -> todo automatically, running headless?
     KP_POSITION = 0.015
-    KD_VELOCITY = 0.30
+    KD_VELOCITY = 0.1
     KP_HEADING = 0.8
 
     def __init__(self, heading_goal=None):
@@ -52,13 +52,7 @@ class PDController:
         ###########
         # we calculate ux and uy, thrusts along x and y axis 
         # in map's frame
-        #TODO: wwriting full thing for ease of reading, otherwise just following line:
-        # ux, uy = self.KP_POSITION * (self.goal - self.position_) - self.KD_VELOCITY * self.velocity_
-        vx = self.velocity_[0]
-        vy = self.velocity_[1]
-        x, y = self.position_[0], self.position_[1]
-        goal_x, goal_y = self.goal[0], self.goal[1]
-        
+         
         if self.desired_velocity_ is None:
             # waypoint based pre-existing direct-to-goal PD control
             # NB might wanna delete later on?

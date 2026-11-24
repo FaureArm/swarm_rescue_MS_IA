@@ -65,7 +65,7 @@ def path_components():
         "path_follower": PathFollower(
             path=path,
             lookahead=80.0,
-            gain=10,
+            gain=0.05,
             max_pos=5.0,
             max_vel=10,
         ),

@@ -76,10 +76,23 @@ class PathFollower:
         # get the target speed
         # cap speed at the assigned value
         # and slow down near the target
-        speed = min(
-            self.path_[self.index].velocity, #TODO: for now just use previous waypoint speed, either pick next but issue with end point, or gradual change?
-            self.position_gain_ * distance,
-        )
+        progress = np.clip(fraction, 0.0, 1.0)
+
+        start_speed = self.path_[self.index].velocity
+        end_speed = self.path_[self.index + 1].velocity
+        next_waypoint = self.path_[self.index + 1]
+
+        # we differenriate when the next target speed is 0
+        # normal solution would overshoot or too slow
+        if next_waypoint.velocity == 0:
+            target = self.positions[self.index + 1]
+            displacement = target - position
+            distance = np.linalg.norm(displacement)
+
+            speed = min(start_speed, self.position_gain_ * distance)
+        else:
+            # normal speed interpolation and lookahead target
+            speed = (1.0 - progress) * start_speed + progress * end_speed
 
         # derive an actual velocity vector
         velocity = np.zeros(2)
