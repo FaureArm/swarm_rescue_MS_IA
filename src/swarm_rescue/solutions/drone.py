@@ -4,12 +4,13 @@ from swarm_rescue.solutions.debug_draw import DebugDraw
 
 
 class RescueDrone(DroneAbstract):
-    def __init__(self, *, estimator, mission, controller, mapper=None, **kwargs):
+    def __init__(self, *, estimator, mission, controller, mapper=None, path_follower=None, **kwargs):
         super().__init__(**kwargs)
         self.estimator = estimator
         self.mission = mission
         self.controller = controller
         self.mapper = mapper
+        self.path_follower = path_follower
         if self.mapper is not None and self.size_area is not None:
             self.mapper.set_map_size(self.size_area)
         self.debug_draw = DebugDraw(mission, mapper)
@@ -51,9 +52,22 @@ class RescueDrone(DroneAbstract):
         ):
             self.debug_draw.plot_occupancy_grid()
 
+        # TODO: architecture cleanup, this is starting to become a mess
+        if self.path_follower is not None:
+            reference = self.path_follower.update(self.estimator)
+            # if we are following along a path, then keep doing so
+            return self.controller.control(
+                reference.position,
+                self.estimator,
+                grasper=0,
+                desired_velocity=reference.velocity,
+            )
+
+
         if decision.destination is None:
             return {"forward": 0.0, "lateral": 0.0, "rotation": 0.0, "grasper": 0}
 
+        # otherwise we just follow a single waypoint
         # Direct-to-target flight until a working Navigator is introduced.
         return self.controller.control(
             decision.destination, self.estimator, decision.grasper

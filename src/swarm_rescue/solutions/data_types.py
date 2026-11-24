@@ -23,9 +23,12 @@ class Waypoint(NamedTuple):
     x: float
     y: float
     velocity: float
-    heading: float
+    heading: float | None # for now might not use heading due to holonomic nature
 
-
+class MotionReference(NamedTuple):
+    position: np.ndarray       # lookahead point, useful for display
+    velocity: np.ndarray       # desired world-frame velocity vector
+    heading: float | None
 class OccupancyGrid:
     """class to hold grid occupancy probabilistic map.
     probability are loggits, so a value of 0 for the log_odds att means 50% proba
