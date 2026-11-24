@@ -16,11 +16,14 @@ class Waypoint(NamedTuple):
     Attributes:
         x (float): The x-coordinate of the waypoint.
         y (float): The y-coordinate of the waypoint.
-    TODO: Add a heading attribute to the waypoint, to allow for more precise navigation
+        velocity (float): The target velocity to have when reaching the waypoint
+        heading (float): The target heading to have when reaching the waypoint
     """
 
     x: float
     y: float
+    velocity: float
+    heading: float
 
 
 class OccupancyGrid:
