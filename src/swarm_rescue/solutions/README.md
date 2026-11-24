@@ -75,3 +75,74 @@ SWARM_RESCUE_USE_SHADERS=1 SWARM_RESCUE_ALLOW_TRUE_STATE=0 uv run -m swarm_rescu
 
 Append `--config config/<plan>.yml` to choose an evaluation plan, or `--headless`
 to hide the window (a display/OpenGL context is still required).
+
+
+solutions/
+├── my_drone_eval.py             # Required simulator entry point
+├── team_info.yml
+├── README.md
+├── config.py                   # Parameters and implementation choices
+├── assembly.py                 # Construct and connect component instances
+├── drone.py                    # Simulator adapter and execution loop
+│
+├── contracts/                  # Data exchanged between subsystems
+│   ├── observations.py         # Sensor measurements and detections
+│   ├── state.py                # Estimated pose, velocity, uncertainty
+│   ├── goals.py                # Destinations, tasks and action intent
+│   └── motion.py               # Motion references, commands, progress
+│
+├── estimation/
+│   ├── interface.py            # StateEstimator protocol
+│   ├── measured_state.py       # Current direct-measurement implementation
+│   └── kalman_pose_estimator.py # Planned
+│
+├── perception/
+│   ├── interface.py            # Perception protocol
+│   └── semantic_perception.py  # Interpret simulator semantic observations
+│
+├── mapping/
+│   ├── interface.py            # Map-query and update contracts
+│   ├── occupancy_grid.py       # Geometric evidence and observation history
+│   ├── lidar_mapper.py         # Integrate LiDAR observations
+│   ├── object_map.py           # Planned: remembered people, centers, etc.
+│   └── map_fusion.py           # Planned: combine received map information
+│
+├── decision/
+│   ├── interface.py            # Behavior protocol
+│   ├── mission_planner.py      # Select the active behavior/task
+│   ├── waypoint_behavior.py    # Manual waypoint experiments
+│   │
+│   ├── exploration/
+│   │   ├── interface.py        # ExplorationPolicy protocol
+│   │   ├── frontier_detector.py
+│   │   ├── nearest_frontier_policy.py
+│   │   └── exploration_behavior.py
+│   │
+│   ├── rescue/
+│   │   └── rescue_behavior.py  # Planned: approach, grasp, carry, release
+│   │
+│   └── return_behavior.py      # Planned: return to the designated area
+│
+├── navigation/
+│   ├── interface.py            # Navigator and PathPlanner protocols
+│   ├── direct_navigator.py     # Preserve today's direct-waypoint behavior
+│   ├── route_navigator.py      # Planned: coordinate planning and following
+│   ├── traversability.py       # Planned: footprint, clearance, obstacle costs
+│   ├── astar_planner.py        # Planned
+│   ├── path_follower.py        # Planned
+│   └── local_avoidance.py      # Planned
+│
+├── control/
+│   ├── interface.py            # MotionController protocol
+│   └── pd_controller.py        # Current controller; alternatives fit here
+│
+├── coordination/
+│   ├── interface.py            # Coordination inputs and outputs
+│   ├── communication.py        # Planned: message encoding and exchange
+│   ├── peer_state.py           # Planned: known drones and availability
+│   └── assignments.py          # Planned: distribute exploration/rescue tasks
+│
+└── visualization/
+    └── debug_draw.py           # Read component outputs display them
+
+

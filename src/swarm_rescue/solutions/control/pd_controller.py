@@ -2,6 +2,8 @@ import numpy as np
 
 from swarm_rescue.simulation.drone.controller import CommandsDict
 from swarm_rescue.simulation.utils.utils import normalize_angle
+from swarm_rescue.solutions.contracts.motion import MotionCommand, MotionReference
+from swarm_rescue.solutions.contracts.state import StateEstimate
 
 
 class PDController:
@@ -14,11 +16,25 @@ class PDController:
         self.heading_goal = heading_goal
 
     def control(self, goal, estimate, grasper) -> CommandsDict:
+        command = self.compute_commands(
+            MotionReference(goal),
+            StateEstimate(estimate.position_, estimate.yaw_, estimate.velocity_),
+        )
+        return {
+            "forward": command.forward,
+            "lateral": command.lateral,
+            "rotation": command.rotation,
+            "grasper": grasper,
+        }
+
+    def compute_commands(
+        self, reference: MotionReference, estimate: StateEstimate,
+    ) -> MotionCommand:
         # TODO write description
-        self.goal = goal
-        self.position_ = estimate.position_
-        self.yaw_ = estimate.yaw_
-        self.velocity_ = estimate.velocity_
+        self.goal = reference.destination
+        self.position_ = estimate.position
+        self.yaw_ = estimate.yaw
+        self.velocity_ = estimate.velocity
 
         # maintain current orientation if dont know where to head to
         if self.heading_goal is None:
@@ -26,15 +42,9 @@ class PDController:
 
         new_forward = self.compute_thrust()[0]
         new_lateral = self.compute_thrust()[1]
-        new_grasper = grasper
         new_heading = self.compute_heading()
 
-        return {
-            "forward": new_forward,
-            "lateral": new_lateral,
-            "rotation": new_heading,
-            "grasper": new_grasper,
-        }
+        return MotionCommand(new_forward, new_lateral, new_heading)
 
     # to avoid division by zero, wrap angles
     @staticmethod
