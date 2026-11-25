@@ -15,6 +15,7 @@ class LidarMapper:
         self.frontier_mask_ = None
         self.frontier_waypoints_ = np.empty((0, 2), dtype=float)
         self.frontier_update_interval_ = frontier_update_interval
+        self.rescue_center_position = None
 
     def set_map_size(self, map_size):
         """Set the playground dimensions and recreate the grid before mapping starts."""
@@ -29,8 +30,6 @@ class LidarMapper:
 
     def get_lidar_hits(self, drone_position, yaw, ranges, angles):
         """get the lidar hits, as pixels. Only returns positive hits !
-
-
         """
         if ranges is None:
             return np.empty((0, 2), dtype=int)
@@ -73,6 +72,11 @@ class LidarMapper:
             drone_position (_type_): drone position in worl frame
             yaw (_type_): drone heading in world frame, in radian
         """
+        # PM : store rescue center position at first shot
+        if (self.rescue_center_position is None and 
+            drone_position is not None):
+            self.rescue_center_position = np.asarray(drone_position)
+
         pixels = self.get_lidar_hits(drone_position, yaw, ranges, angles)
 
         for x, y in pixels:
@@ -206,6 +210,7 @@ class LidarMapper:
     ):
         """Cache one eligible world-coordinate waypoint per frontier cluster."""
         clusters = self.find_frontier_clusters(minimum_cluster_size=minimum_cluster_size)
+        
         if not clusters:
             self.frontier_waypoints_ = np.empty((0, 2), dtype=float)
             return self.frontier_waypoints_
@@ -241,10 +246,11 @@ class LidarMapper:
             minimum_cluster_size=minimum_cluster_size,
             minimum_distance=minimum_distance,
         )
+
         if len(waypoints) == 0:
             return None
 
         # so far we use distance to determine the waypoint we choose
         #TODO: try other methods
         distances = np.linalg.norm(waypoints - drone_position, axis=1)
-        return waypoints[np.argmin(distances)].copy()
+        return waypoints[np.argmax(distances)].copy()

@@ -1,82 +1,168 @@
 import numpy as np
 
 from swarm_rescue.solutions.data_types import MissionDecision
+from swarm_rescue.solutions.mapping import LidarMapper
+from swarm_rescue.solutions.localisation import MeasuredState, SemanticState
+
+ARRIVAL_THRESHOLD = 35.0 # exploration reach threshold
+RESCUE_THRESHOLD = 5.0 # exploration reach threshold
+MIN_CLUSTER_SIZE = 50
+MIN_DISTANCE = 50.0
+
+class Mission:
+    def __init__(self, goal = None):
+        self.goal = goal
+
+class GlobalPlanner:
+    def __init__(self):
+        # PM always init in exploration mode
+        self.mission = ExplorationMission()
+
+    # PM : TODO add missions and args with new configurations
+    # such as : EscortMission(Mission) - drones exploring by pair (1 Explore and 1 Escort) to identify kill zone for example
+    # has_received_leader_ping: bool - get keep-alive signal from the escort leader (monitor kill-zone)
+
+    def update_mission(self, rescue_center_position: tuple,
+                       semantic_state: SemanticState):
+        """Compute the current drone task regarding some informations from the drone,
+         and the current mission
+
+        Args:
+            is_wounded_found (bool): _description_
+            is_rescue_center_found (bool): _description_
+            has_grasped_wounded (bool): _description_
+
+        Returns:
+            Mission: _description_
+        """
+        if isinstance(self.mission, ExplorationMission) and semantic_state.has_found_wounded and not semantic_state.has_grasped_wounded:
+            self.mission = RescueMission(semantic_state.wounded_list[0])
+            print(self.mission)
+
+        elif isinstance(self.mission, RescueMission) and semantic_state.has_grasped_wounded:
+            self.mission = DropMission(rescue_center_position)
+            print(self.mission)
+
+        elif isinstance(self.mission, DropMission) and not semantic_state.has_grasped_wounded:
+            self.mission = ExplorationMission()
+            print(self.mission)
+
+        # PM TODO : Update with further mission types
 
 
-class WaypointMission:
-    def __init__(self, *, goal=None, arrival_threshold=0.5):
-        # if no goal set, return to center of map
-        self.goal = np.asarray((0.0,0.0), dtype=float) if goal is None else np.asarray(goal, dtype=float)
-        # make sure not to share goals between instances, could cause issues? to check
-        self.goal = self.goal.copy()
-        self.position_ = None
-        self.arrival_threshold = arrival_threshold
-        self.role = "waypoint"
+        return True
 
-    def decide(self, position) -> MissionDecision:
-        """hooses what the drone should do next, using its position estimate
+    def decide(self, estimator:MeasuredState, semantic_state:SemanticState, mapper:LidarMapper) -> MissionDecision:
+        """Call child method, depending on the affected mission
 
         Args:
             position (_type_): _description_
+            mapper (LidarMapper): _description_
 
         Returns:
             MissionDecision: _description_
         """
-        self.position_ = position
-        self.update_goal()
-        return MissionDecision(self.goal, self.compute_grasper())
+        return self.mission.decide(estimator, semantic_state, mapper)
 
-    def update_goal(self):
-        """Functions which updates or not the current goal
-        
+class RescueMission(Mission):
+    """Initialized with a wounded position."""
+    def __init__(self, goal = None):
+        self.goal = goal 
+
+    def update_goal(self, semantic_state:SemanticState) -> tuple:
+        """Update goal for a moving wounded
+
+        Args:
+            semantic_state (SemanticState): _description_
+
         Returns:
-            boolean: True if we managed to update our goal, False else
+            tuple: _description_
         """
-        # change goals
-        if self.goal is not None and self.position_ is not None :
-            if np.linalg.norm(self.goal - self.position_) < self.arrival_threshold:
-                self.goal = np.random.uniform(-100, 100, size=2)  # random new goal if close enough
-                print(f"New goal: {self.goal}")
+        if(len(semantic_state.wounded_list) > 0):
+            return semantic_state.wounded_list[0]
+        else:
+            return self.goal
+            
+    def decide(self, estimator:MeasuredState, semantic_state:SemanticState, mapper:LidarMapper) -> MissionDecision:
+        """Always set grasper to 1 when rescuing
 
-        return True
+        Args:
+            position (tuple): _description_
+            mapper (LidarMapper): _description_
 
+        Returns:
+            MissionDecision: _description_
+        """
+        self.goal = self.update_goal(semantic_state)
+        
+        return MissionDecision(self.goal, 1)
+    
+class DropMission(Mission):
+    """Initialized with the rescue center position."""
+    def __init__(self, goal = None):
+        self.goal = goal
+        self.exploration_path = [(20, -180),(-50, -180),(-50, 170),(-310, 170),(-310, -180),]
+        self.index = len(self.exploration_path) - 1
 
-    def compute_grasper(self):
-        return 0
+    def update_goal(self, position, mapper:LidarMapper) -> tuple:
+        if self.index > 0:
+            self.index -= 1
 
-
-class FrontierExplorationMission:
-    """Refresh exploration goals when frontiers change or the goal is reached."""
-    def __init__(
-        self, *, mapper, arrival_threshold=5.0,
-        minimum_cluster_size=50, minimum_distance=50.0,
-    ):
-        self.mapper = mapper
-        self.goal = None
-        self.arrival_threshold = arrival_threshold
-        self.minimum_cluster_size = minimum_cluster_size
-        self.minimum_distance = minimum_distance
-        self.role = "exploration"
-        self._last_frontier_mask = None # hold frontier masks for effenciency
-
-    def decide(self, position) -> MissionDecision:
-        if position is None:
+        return self.exploration_path[self.index]
+            # return mapper.select_exploration_waypoint(
+            #         position,
+            #         minimum_cluster_size = MIN_CLUSTER_SIZE,
+            #         minimum_distance = MIN_DISTANCE,
+            #         )
+    
+    def decide(self, estimator:MeasuredState, semantic_state:SemanticState, mapper:LidarMapper) -> MissionDecision:
+        if estimator.position_ is None:
             return MissionDecision(None, 0)
 
-        frontier_mask = self.mapper.frontier_mask_
-        frontiers_updated = frontier_mask is not self._last_frontier_mask
+        if self.goal is None:
+            self.goal = self.update_goal(estimator.position_, mapper)
 
         goal_reached = (
             self.goal is not None
-            and np.linalg.norm(self.goal - position) < self.arrival_threshold
+            and np.linalg.norm(self.goal - estimator.position_) < ARRIVAL_THRESHOLD
         )
 
-        if frontiers_updated or goal_reached:
-            self.goal = self.mapper.select_exploration_waypoint(
-                position,
-                minimum_cluster_size=self.minimum_cluster_size,
-                minimum_distance=self.minimum_distance,
-            )
+        if goal_reached:
+            self.goal = self.update_goal(estimator.position_, mapper)
 
-        self._last_frontier_mask = frontier_mask
+        return MissionDecision(self.goal, 0)
+
+class ExplorationMission(Mission):
+    """Refresh exploration goals when frontiers change or the goal is reached."""
+    def __init__(self):
+        self.goal = None
+        self.exploration_path = [(20, -180),(-50, -180),(-50, 170),(-310, 170),(-310, -180),]
+        self.index = -1
+
+    def update_goal(self, position, mapper:LidarMapper) -> tuple:
+        if self.index < len(self.exploration_path) - 1:
+            self.index += 1
+
+        return self.exploration_path[self.index]
+            # return mapper.select_exploration_waypoint(
+            #         position,
+            #         minimum_cluster_size = MIN_CLUSTER_SIZE,
+            #         minimum_distance = MIN_DISTANCE,
+            #         )
+    
+    def decide(self, estimator:MeasuredState, semantic_state:SemanticState, mapper:LidarMapper) -> MissionDecision:
+        if estimator.position_ is None:
+            return MissionDecision(None, 0)
+
+        if self.goal is None:
+            self.goal = self.update_goal(estimator.position_, mapper)
+
+        goal_reached = (
+            self.goal is not None
+            and np.linalg.norm(self.goal - estimator.position_) < ARRIVAL_THRESHOLD
+        )
+
+        if goal_reached:
+            self.goal = self.update_goal(estimator.position_, mapper)
+
         return MissionDecision(self.goal, 0)
