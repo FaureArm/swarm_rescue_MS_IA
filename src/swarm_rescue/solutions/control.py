@@ -2,6 +2,7 @@ import numpy as np
 
 from swarm_rescue.simulation.drone.controller import CommandsDict
 from swarm_rescue.simulation.utils.utils import normalize_angle
+from swarm_rescue.solutions.data_types import MissionDecision, Activity
 
 
 class PDController:
@@ -13,9 +14,9 @@ class PDController:
     def __init__(self, heading_goal=None):
         self.heading_goal = heading_goal
 
-    def control(self, goal, estimate, grasper) -> CommandsDict:
+    def control(self, decision:MissionDecision, estimate) -> CommandsDict:
         # TODO write description
-        self.goal = goal
+        self.goal = decision.destination
         self.position_ = estimate.position_
         self.yaw_ = estimate.yaw_
         self.velocity_ = estimate.velocity_
@@ -26,9 +27,22 @@ class PDController:
 
         new_forward = self.compute_thrust()[0]
         new_lateral = self.compute_thrust()[1]
-        new_grasper = grasper
-        new_heading = self.compute_heading()
+        new_grasper = decision.grasper
 
+        # PM TODO : code it more properly
+        # if currently trying to drop a victim, 
+        # turn around until matching the dropping position
+        if decision.role is Activity.GRASPING_WOUNDED or decision.role is Activity.DROPPING_AT_RESCUE_CENTER:
+            new_heading = self.compute_frontal_approach()
+            # reduce speed if we need to turn a lot
+            if abs(new_heading) == 1:
+                new_forward = new_forward / 2
+                new_lateral = new_lateral / 2
+
+        else:
+            new_heading = self.compute_heading()
+
+        Activity
         return {
             "forward": new_forward,
             "lateral": new_lateral,
@@ -77,6 +91,24 @@ class PDController:
         return np.array([forward / scale , lateral / scale])
 
 
+    def compute_frontal_approach(self):
+        """Functions which computes rotation to face the goal
+                        
+        Returns:
+            np.array(): heading in radians
+        """
+        x, y = self.position_[0], self.position_[1]
+        goal_x, goal_y = self.goal[0], self.goal[1]
+        ux = self.KP_POSITION * (goal_x - x)
+        uy = self.KP_POSITION * (goal_y - y)
+
+        rotation = np.atan2(uy, ux)
+
+        rotation = min(rotation, 1.0)
+        rotation = max(rotation, -1.0)
+
+        return rotation
+    
     def compute_heading(self):
         """Functions which computes heading
                         

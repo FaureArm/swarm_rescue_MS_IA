@@ -1,7 +1,6 @@
 import numpy as np
 from swarm_rescue.simulation.ray_sensors.drone_semantic_sensor import DroneSemanticSensor
 
-
 class MeasuredState:
     def __init__(self):
         self.position_ = None
@@ -18,55 +17,55 @@ class MeasuredState:
 class SemanticState:
     def __init__(self):
         self.has_found_wounded = False
-        self.has_grasped_wounded = False 
-        self.has_found_rescue_center = False
         self.wounded_list = []
+        self.rescue_center_position = None
 
-    def process_semantic_data(self, estimator:MeasuredState, detection_semantic):
+    def compute_POI_position(self, estimator:MeasuredState, semantic_data) -> tuple:
+        """_summary_
+
+        Args:
+            estimator (MeasuredState): _description_
+            semantic_data (_type_): _description_
+
+        Returns:
+            tuple: _description_
         """
-        According to his state in the state machine, the Drone will move
+        # compute victim position from drone position
+        POI_position = np.array([estimator.position_[0] + semantic_data.distance * np.cos(estimator.yaw_ + semantic_data.angle), 
+                                estimator.position_[1] + semantic_data.distance * np.sin(estimator.yaw_ + semantic_data.angle)])
+        
+        return POI_position
+
+    def update_semantic(self, estimator:MeasuredState, semantic_data_table, has_grasped_wounded:bool):
+        """
+        According to his state, the Drone will move
         toward a wounded person or the rescue center
         """
-        has_found_wounded = False
-        has_grasped_wounded = False 
-        has_found_rescue_center = False
-        wounded_list = []
+        self.wounded_list = []
 
-        if detection_semantic is not None:
-            for data in detection_semantic:
-                # If the wounded person detected
-                if data.entity_type == DroneSemanticSensor.TypeEntity.WOUNDED_PERSON:
-                    # If the wounded person is grasped
-                    if data.grasped:
-                        print("grasped")
-                        has_grasped_wounded = True
-                    print("not grasped")
-                    print(data)
-                        
-                    has_found_wounded = True
+        if semantic_data_table is not None:
+            for semantic_data in semantic_data_table:
 
-                    # PM TODO : compute a score to affect victim to a drone in case of multiple drone and multiple victim
-                    # PM compute victim position from drone position
-                    wounded_position = np.array([estimator.position_[0] + data.distance * np.cos(estimator.yaw_ + data.angle), 
-                                                 estimator.position_[1] + data.distance * np.sin(estimator.yaw_ + data.angle)])
+                # If a wounded person is detected
+                if (semantic_data.entity_type == DroneSemanticSensor.TypeEntity.WOUNDED_PERSON):
 
-                    wounded_list.append(wounded_position)
+                    # if that's the first time this victim is discovered
+                    if not self.has_found_wounded:
+                        self.has_found_wounded = True
 
+                    wounded_position = self.compute_POI_position(estimator, semantic_data)
 
-                if (has_found_wounded and has_grasped_wounded and 
-                        data.entity_type == DroneSemanticSensor.TypeEntity.RESCUE_CENTER):
-                    has_found_rescue_center = True
+                    # PM TODO: IN CASE OF MANY DETECTED VICTIMS
+                    # compute a score to affect a spcific victim to a drone 
+                    # in case of multiple drone and multiple victim
+                    self.wounded_list.append(wounded_position)
 
+                elif (semantic_data.entity_type == DroneSemanticSensor.TypeEntity.RESCUE_CENTER and
+                      self.rescue_center_position is None):
+                    self.rescue_center_position = self.compute_POI_position(estimator, semantic_data)
 
-        self.has_found_wounded = has_found_wounded if self.has_found_wounded is not has_found_wounded else self.has_found_wounded
-        self.has_grasped_wounded = has_grasped_wounded if self.has_grasped_wounded is not has_grasped_wounded else self.has_grasped_wounded
-        self.has_found_rescue_center = has_found_rescue_center if self.has_found_rescue_center is not has_found_rescue_center else self.has_found_rescue_center
-        self.wounded_list = wounded_list if self.wounded_list is not wounded_list else self.wounded_list
+        # PM: no more wounded identified - back to exploration
+        if len(self.wounded_list) == 0:
+            self.has_found_wounded = False
 
         return True
-
-    def update_semantic(self, has_found_wounded, has_found_rescue_center, wounded_list):
-        """Store the semantic detection"""
-        self.has_found_wounded = has_found_wounded
-        self.has_found_rescue_center = has_found_rescue_center
-        self.wounded_list = wounded_list

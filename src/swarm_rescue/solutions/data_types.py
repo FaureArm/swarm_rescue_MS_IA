@@ -1,14 +1,25 @@
 """Shared data structures for the drone's components."""
 
+from enum import Enum
 from typing import NamedTuple
 
 import numpy as np
 
+class Activity(Enum):
+    """
+    All the states of the drone as a state machine
+    """
+    EXPLORING = 0
+    SEARCHING_WOUNDED = 1
+    GRASPING_WOUNDED = 2
+    SEARCHING_RESCUE_CENTER = 3
+    DROPPING_AT_RESCUE_CENTER = 4
 
 class MissionDecision(NamedTuple):
     # small class to hold decisions and reuse easily
     destination: np.ndarray | None
     grasper: int
+    role: Activity
 
 
 class Waypoint(NamedTuple):

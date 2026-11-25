@@ -33,13 +33,14 @@ class RescueDrone(DroneAbstract):
         return None
 
     def control(self) -> CommandsDict:
-        # keep updating pose and such, and applying safety if no measures
-        self.estimator.update_estimate(
-            self.get_GPS(), self.get_yaw(), self.get_velocity())
 
-        self.semantic_state.process_semantic_data(self.estimator, self.semantic_values())
+        # KALMAN filter
+        self.estimator.update_estimate(self.get_GPS(), self.get_yaw(), self.get_velocity())
 
-        self.planner.update_mission(self.estimator.position_, self.semantic_state)
+        # Look for wounded person on the way
+        self.semantic_state.update_semantic(self.estimator, self.semantic_values(), self.grasper.grasped_wounded_persons)
+
+        self.planner.update_mission(self.semantic_state.rescue_center_position, self.semantic_state, self.grasper.grasped_wounded_persons)
         
         if isinstance(self.planner.mission, ExplorationMission):
             #TODO: replace with a getter, so that we can apply kalman filtering later
@@ -53,16 +54,14 @@ class RescueDrone(DroneAbstract):
         if decision.destination is None:
             return {"forward": 0.0, "lateral": 0.0, "rotation": 0.0, "grasper": 0}
 
-        # update occupancy grid plot
-        if (
-            self.mapper is not None
-        ):
-            self.debug_draw.plot_occupancy_grid()
+        # # update occupancy grid plot
+        # if (
+        #     self.mapper is not None
+        # ):
+        #     self.debug_draw.plot_occupancy_grid()
 
         # Direct-to-target flight until a working Navigator is introduced.
-        return self.controller.control(
-            decision.destination, self.estimator, decision.grasper
-        )
+        return self.controller.control(decision, self.estimator)
 
     def get_GPS(self):
         """Update GPS

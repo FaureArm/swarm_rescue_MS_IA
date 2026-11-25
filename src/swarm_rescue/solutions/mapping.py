@@ -15,7 +15,7 @@ class LidarMapper:
         self.frontier_mask_ = None
         self.frontier_waypoints_ = np.empty((0, 2), dtype=float)
         self.frontier_update_interval_ = frontier_update_interval
-        self.rescue_center_position = None
+        self.drone_spawn_position = None
 
     def set_map_size(self, map_size):
         """Set the playground dimensions and recreate the grid before mapping starts."""
@@ -73,9 +73,9 @@ class LidarMapper:
             yaw (_type_): drone heading in world frame, in radian
         """
         # PM : store rescue center position at first shot
-        if (self.rescue_center_position is None and 
+        if (self.drone_spawn_position is None and 
             drone_position is not None):
-            self.rescue_center_position = np.asarray(drone_position)
+            self.drone_spawn_position = np.asarray(drone_position)
 
         pixels = self.get_lidar_hits(drone_position, yaw, ranges, angles)
 
