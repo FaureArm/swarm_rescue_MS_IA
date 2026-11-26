@@ -15,6 +15,16 @@ class PDController:
         self.heading_goal = heading_goal
 
     def control(self, decision:MissionDecision, estimate) -> CommandsDict:
+
+        # Stand-By position
+        if decision.role == Activity.STAND_BY:
+            return {
+            "forward": 0,
+            "lateral": 0,
+            "rotation": 0,
+            "grasper": 0,
+        }
+
         # TODO write description
         self.goal = decision.destination
         self.position_ = estimate.position_
@@ -29,16 +39,11 @@ class PDController:
         new_lateral = self.compute_thrust()[1]
         new_grasper = decision.grasper
 
-        # PM TODO : code it more properly
+        # PM TODO : maybe code it more properly
         # if currently trying to drop a victim, 
         # turn around until matching the dropping position
         if decision.role is Activity.GRASPING_WOUNDED or decision.role is Activity.DROPPING_AT_RESCUE_CENTER:
             new_heading = self.compute_frontal_approach()
-            # reduce speed if we need to turn a lot
-            if abs(new_heading) == 1:
-                new_forward = new_forward / 2
-                new_lateral = new_lateral / 2
-
         else:
             new_heading = self.compute_heading()
 
@@ -99,13 +104,22 @@ class PDController:
         """
         x, y = self.position_[0], self.position_[1]
         goal_x, goal_y = self.goal[0], self.goal[1]
-        ux = self.KP_POSITION * (goal_x - x)
-        uy = self.KP_POSITION * (goal_y - y)
+        ux = (goal_x - x)
+        uy = (goal_y - y)
 
-        rotation = np.atan2(uy, ux)
+        direction = np.atan2(uy, ux)
+        diff_angle = normalize_angle(direction - self.yaw_)
 
-        rotation = min(rotation, 1.0)
-        rotation = max(rotation, -1.0)
+        stop_angle = 0.1
+        a = abs(diff_angle) - stop_angle
+
+        if a < self.KP_POSITION:
+            # stop rotation when the yaw target is reached
+            rotation = 0
+        else:
+            # We use a logistic function. -1 < intensity(d) < 1 and  intensity(0) = 0
+            # intensity(d) approaches 1 (resp. -1) as d approaches +inf (resp. -inf)
+            rotation = 2 / (1 + np.exp(-diff_angle / (stop_angle * 0.5))) - 1
 
         return rotation
     
@@ -121,4 +135,3 @@ class PDController:
         heading = np.clip(self.KP_HEADING * heading_error, -1.0, 1.0)
         ###########
         return heading
-

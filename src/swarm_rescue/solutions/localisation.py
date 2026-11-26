@@ -63,6 +63,7 @@ class SemanticState:
                 elif (semantic_data.entity_type == DroneSemanticSensor.TypeEntity.RESCUE_CENTER and
                       self.rescue_center_position is None):
                     self.rescue_center_position = self.compute_POI_position(estimator, semantic_data)
+                    print(self.rescue_center_position)
 
         # PM: no more wounded identified - back to exploration
         if len(self.wounded_list) == 0:

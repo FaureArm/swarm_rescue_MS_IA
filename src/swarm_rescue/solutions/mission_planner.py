@@ -5,6 +5,7 @@ from swarm_rescue.solutions.mapping import LidarMapper
 from swarm_rescue.solutions.localisation import MeasuredState, SemanticState
 
 EXPLORATION_THRESHOLD = 35.0 # exploration threshold
+APPROACHING_THRESHOLD = 100.0 # exploration threshold
 RESCUE_THRESHOLD = 10.0 # rescue threshold
 MIN_CLUSTER_SIZE = 50
 MIN_DISTANCE = 50.0
@@ -37,8 +38,7 @@ class GlobalPlanner:
             self.mission = DropMission(rescue_center_position)
 
         elif isinstance(self.mission, DropMission) and not has_graspered_wounded:
-            print("back to exploration")
-            self.mission = ExplorationMission()
+            self.mission = StandBy()
 
         return True
 
@@ -167,6 +167,12 @@ class DropMission(Mission):
             return MissionDecision(None, 1, Activity.SEARCHING_RESCUE_CENTER)
     
         # PM: different reaching thresholds between waypoints and rescue center
+        approaching_rescue_center = (
+            self.goal is not None
+            and np.linalg.norm(self.goal - estimator.position_) < APPROACHING_THRESHOLD
+        )
+
+        
         rescue_center_reached = (
             self.goal is not None
             and np.linalg.norm(self.goal - estimator.position_) < EXPLORATION_THRESHOLD
@@ -177,11 +183,26 @@ class DropMission(Mission):
             and np.linalg.norm(self.intermediate_goal - estimator.position_) < EXPLORATION_THRESHOLD
         )
 
-        if rescue_center_reached:
-            return MissionDecision(self.goal, 0, Activity.DROPPING_AT_RESCUE_CENTER)
+        # first contact with rescue center
+        if approaching_rescue_center:
+            return MissionDecision(self.goal, 1, Activity.DROPPING_AT_RESCUE_CENTER)
 
+        elif rescue_center_reached:
+            return MissionDecision(self.goal, 0, Activity.DROPPING_AT_RESCUE_CENTER)
+        
         elif intermediate_goal_reached:
             self.intermediate_goal = self.update_goal(estimator.position_, mapper)
 
         return MissionDecision(self.intermediate_goal, 1, Activity.SEARCHING_RESCUE_CENTER)
+
+
+
         
+class StandBy(Mission):
+    """Stop the drone at its last position."""
+
+    def decide(self, estimator:MeasuredState, semantic_state:SemanticState, mapper:LidarMapper) -> MissionDecision:
+        """Always set grasper to 1 when rescuing
+        """
+        return MissionDecision(self.goal, 0, Activity.STAND_BY)
+

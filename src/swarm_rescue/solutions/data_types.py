@@ -9,6 +9,7 @@ class Activity(Enum):
     """
     All the states of the drone as a state machine
     """
+    STAND_BY = -1
     EXPLORING = 0
     SEARCHING_WOUNDED = 1
     GRASPING_WOUNDED = 2
