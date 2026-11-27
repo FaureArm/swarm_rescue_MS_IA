@@ -26,17 +26,17 @@ class PDController:
         }
 
         # TODO write description
-        self.goal = decision.destination
+        self.goal = decision.motion_reference.target
         self.position_ = estimate.position_
         self.yaw_ = estimate.yaw_
         self.velocity_ = estimate.velocity_
+        self.desired_velocity_ = decision.motion_reference.velocity
 
         # maintain current orientation if dont know where to head to
         if self.heading_goal is None:
             self.heading_goal = self.yaw_
 
-        new_forward = self.compute_thrust()[0]
-        new_lateral = self.compute_thrust()[1]
+        new_forward, new_lateral = self.compute_thrust()
         new_grasper = decision.grasper
 
         # PM TODO : maybe code it more properly
@@ -71,14 +71,20 @@ class PDController:
         ###########
         # we calculate ux and uy, thrusts along x and y axis 
         # in map's frame
-        #TODO: wwriting full thing for ease of reading, otherwise just following line:
-        # ux, uy = self.KP_POSITION * (self.goal - self.position_) - self.KD_VELOCITY * self.velocity_
-        vx = self.velocity_[0]
-        vy = self.velocity_[1]
-        x, y = self.position_[0], self.position_[1]
-        goal_x, goal_y = self.goal[0], self.goal[1]
-        ux = self.KP_POSITION * (goal_x - x) - self.KD_VELOCITY * vx
-        uy = self.KP_POSITION * (goal_y - y) - self.KD_VELOCITY * vy
+         
+        if self.desired_velocity_ is None:
+            # waypoint based pre-existing direct-to-goal PD control
+            # NB might wanna delete later on?
+            ux, uy = (
+                self.KP_POSITION * (self.goal - self.position_)
+                - self.KD_VELOCITY * self.velocity_
+            )
+        else:
+            # path following controller
+            # track the velocity requested by the path follower
+            ux, uy = self.KD_VELOCITY * (
+                self.desired_velocity_ - self.velocity_
+            )
         ###########
 
         ## convert our thrusts in drone frame ##
@@ -94,6 +100,7 @@ class PDController:
         ###########
 
         return np.array([forward / scale , lateral / scale])
+
 
 
     def compute_frontal_approach(self):

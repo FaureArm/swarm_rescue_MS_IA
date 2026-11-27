@@ -16,9 +16,16 @@ class Activity(Enum):
     SEARCHING_RESCUE_CENTER = 3
     DROPPING_AT_RESCUE_CENTER = 4
 
+
+class MotionReference(NamedTuple):
+    target: np.ndarray       # lookahead point, useful for display
+    velocity: np.ndarray       # desired world-frame velocity vector
+    heading: float | None
+
+
 class MissionDecision(NamedTuple):
     # small class to hold decisions and reuse easily
-    destination: np.ndarray | None
+    motion_reference: MotionReference
     grasper: int
     role: Activity
 
@@ -35,7 +42,7 @@ class Waypoint(NamedTuple):
     x: float
     y: float
     velocity: float
-    heading: float
+    heading: float | None # for now might not use heading due to holonomic nature
 
 
 class OccupancyGrid:

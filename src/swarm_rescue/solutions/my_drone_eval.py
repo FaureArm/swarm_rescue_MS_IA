@@ -1,9 +1,9 @@
 from swarm_rescue.solutions.control import PDController
-from swarm_rescue.simulation.drone.drone_motionless import DroneMotionless
 from swarm_rescue.solutions.drone import RescueDrone
 from swarm_rescue.solutions.localisation import MeasuredState, SemanticState
 from swarm_rescue.solutions.mapping import LidarMapper
 from swarm_rescue.solutions.mission_planner import GlobalPlanner
+from swarm_rescue.solutions.path_follower import PathFollower
 
 # NB: constants for testing, might want to move these elsewhere 
 # for cleanless
@@ -21,6 +21,7 @@ def drone_components(*, heading_goal=None):
         "semantic_state": SemanticState(),
         "controller": PDController(heading_goal=heading_goal),
         "mapper": LidarMapper(frontier_update_interval=FRONTIER_UPDATE_INTERVAL),
+        "path_follower":PathFollower()
     }
 
 class MyDroneEval(RescueDrone):

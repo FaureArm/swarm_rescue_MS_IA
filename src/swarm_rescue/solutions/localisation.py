@@ -1,23 +1,31 @@
 import numpy as np
+from swarm_rescue.solutions.kalman import KalmanFusion
 from swarm_rescue.simulation.ray_sensors.drone_semantic_sensor import DroneSemanticSensor
+
+
 
 class MeasuredState:
     def __init__(self):
+        self._kf = KalmanFusion()
         self.position_ = None
         self.yaw_ = None
         self.velocity_ = np.zeros(2)
 
     def update_estimate(self, position, yaw, velocity):
         """Store the GPS, compass and velocity readings for this tick."""
-        self.position_ = position
         self.yaw_ = yaw
-        self.velocity_ = velocity
+
+        # Application filtre Kalman
+        est = self._kf.step(position, velocity)
+        self.position_ = np.asarray(est[:2])
+        self.velocity_ = np.asarray(self._kf.velocity())
         return True
+
 
 class SemanticState:
     def __init__(self):
         self.has_found_wounded = False
-        self.wounded_list = []
+        self.wounded_position_list = []
         self.rescue_center_position = None
 
     def compute_POI_position(self, estimator:MeasuredState, semantic_data) -> tuple:
@@ -41,7 +49,7 @@ class SemanticState:
         According to his state, the Drone will move
         toward a wounded person or the rescue center
         """
-        self.wounded_list = []
+        self.wounded_position_list = []
 
         if semantic_data_table is not None:
             for semantic_data in semantic_data_table:
@@ -58,7 +66,7 @@ class SemanticState:
                     # PM TODO: IN CASE OF MANY DETECTED VICTIMS
                     # compute a score to affect a spcific victim to a drone 
                     # in case of multiple drone and multiple victim
-                    self.wounded_list.append(wounded_position)
+                    self.wounded_position_list.append(wounded_position)
 
                 elif (semantic_data.entity_type == DroneSemanticSensor.TypeEntity.RESCUE_CENTER and
                       self.rescue_center_position is None):
@@ -66,7 +74,7 @@ class SemanticState:
                     print(self.rescue_center_position)
 
         # PM: no more wounded identified - back to exploration
-        if len(self.wounded_list) == 0:
+        if len(self.wounded_position_list) == 0:
             self.has_found_wounded = False
 
         return True

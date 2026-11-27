@@ -6,6 +6,7 @@ from swarm_rescue.solutions.mission_planner import (GlobalPlanner,
                                                     ExplorationMission)
 from swarm_rescue.solutions.control import PDController
 from swarm_rescue.solutions.mapping import LidarMapper
+from swarm_rescue.solutions.path_follower import PathFollower
 
 
 class RescueDrone(DroneAbstract):
@@ -14,7 +15,8 @@ class RescueDrone(DroneAbstract):
                  estimator:MeasuredState, 
                  semantic_state:SemanticState, 
                  controller:PDController, 
-                 mapper:LidarMapper, 
+                 mapper:LidarMapper,
+                 path_follower:PathFollower,
                  **kwargs):
         super().__init__(**kwargs)
         self.planner = planner
@@ -22,12 +24,9 @@ class RescueDrone(DroneAbstract):
         self.semantic_state = semantic_state
         self.controller = controller
         self.mapper = mapper
-
+        self.path_follower = path_follower
         if self.mapper is not None and self.size_area is not None:
             self.mapper.set_map_size(self.size_area)
-
-        self.debug_draw = DebugDraw(self.planner.mission, mapper)
-        # NB: later could add attributes to define role -> done in mission planner, 
 
     def define_message_for_all(self) -> None:
         return None
@@ -49,9 +48,9 @@ class RescueDrone(DroneAbstract):
             self.mapper.update_lidar_map(self.estimator.position_, self.estimator.yaw_, ranges, angles)
             self.mapper.update_occupancy_grid(self.estimator.position_, self.estimator.yaw_, ranges, angles, self.elapsed_timestep)
 
-        decision = self.planner.decide(self.estimator, self.semantic_state, self.mapper)
+        decision = self.planner.decide(self.estimator, self.semantic_state, self.path_follower)
 
-        if decision.destination is None:
+        if decision.motion_reference.target is None:
             return {"forward": 0.0, "lateral": 0.0, "rotation": 0.0, "grasper": 0}
 
         # # update occupancy grid plot
@@ -99,10 +98,8 @@ class RescueDrone(DroneAbstract):
         return self.measured_angular_velocity()
         #return float(self.true_angular_velocity())
 
-    def draw_top_layer(self):
-        return
-        # self.debug_draw.draw_top_layer()
+    # def draw_top_layer(self):
+    #     self.debug_draw.draw_top_layer()
 
-    def plot_lidar_map(self):
-        return
-        # self.debug_draw.plot_lidar_map()
+    # def plot_lidar_map(self):
+    #     self.debug_draw.plot_lidar_map()
