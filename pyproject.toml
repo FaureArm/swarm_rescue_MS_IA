@@ -36,6 +36,7 @@ dependencies = [
     "pillow>=11.0",
     "pymunk>=6.9.0",
     "pyglet>=2.1.5",
+    "pathfinding>=1.0.23",
 ]
 classifiers = [
   "Programming Language :: Python :: 3.10",

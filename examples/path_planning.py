@@ -12,6 +12,8 @@ from types import SimpleNamespace
 
 import arcade
 import numpy as np
+from matplotlib import colormaps
+from matplotlib.colors import ListedColormap
 from skimage.draw import line
 from skimage.measure import label
 
@@ -26,9 +28,11 @@ from swarm_rescue.solutions.data_types import (
 )
 from swarm_rescue.solutions.navigation import build_traversable_mask
 from swarm_rescue.solutions.path_follower import PathFollower
+from swarm_rescue.solutions.navigation import AstartPlanner, build_traversable_mask
 
 
 GOAL = np.array([-310.0, -140.0])  # 40 px above the stationary person.
+WAYPOINT_SPEED_COLORS = ListedColormap(colormaps["viridis"](np.linspace(0, 0.75, 12)))
 
 
 def plan_path(grid: OccupancyGrid, start: np.ndarray, goal: np.ndarray):
@@ -37,7 +41,7 @@ def plan_path(grid: OccupancyGrid, start: np.ndarray, goal: np.ndarray):
     Include start and goal. The grid stores raw obstacles without drone-radius
     inflation; traversability and clearance belong in the future planner.
     """
-    return None
+    return AstartPlanner().plan_path(grid, start, goal)
 
 
 def build_known_grid(the_map):
@@ -108,10 +112,15 @@ class PathPlanningDrone(DroneAbstract):
             raise ValueError("Route must include the scenario start and goal")
         self.route = points.copy()
         self.arrived = False
-        waypoints = [Waypoint(x, y, 1.5, None) for x, y in points]
+        waypoints = AstartPlanner(clearance_px = 25, max_speed=10, min_speed=1).extract_waypoints(points)
         waypoints[-1] = Waypoint(*points[-1], 0.0, None)
         self.path_follower.set_path(waypoints, lookahead=15.0, gain=0.05,
                                     max_pos=5.0, max_vel=0.1)
+        speeds = self.path_follower.speeds
+        colors = WAYPOINT_SPEED_COLORS(speeds / (speeds.max() or 1.0), bytes=True)
+        self.waypoint_color_groups = {}
+        for position, color in zip(self.path_follower.positions.tolist(), colors.tolist()):
+            self.waypoint_color_groups.setdefault(tuple(color), []).append(position)
 
     def control(self):
         estimate = SimpleNamespace(
@@ -142,6 +151,9 @@ class PathPlanningDrone(DroneAbstract):
             arcade.draw_line_strip(self.route.tolist(), (255, 165, 0), 2)
         if len(self.trajectory) > 1:
             arcade.draw_line_strip(self.trajectory, (0, 200, 255), 2)
+        if self.route is not None:
+            for color, positions in self.waypoint_color_groups.items():
+                arcade.draw_points(positions, color, 6)
 
 
 def create_scenario(seed=42):
@@ -178,9 +190,8 @@ def validate_scenario(drone):
     print("Fully observed; endpoints free; direct route blocked; detour exists.")
 
 
-def plot_grid(drone, *, block=True):
+def plot_grid(drone, *, waypoint_positions=None, waypoint_speeds=None, block=True):
     import matplotlib.pyplot as plt
-    from matplotlib.colors import ListedColormap
 
     grid = drone.grid
     known_free = grid.classify_cells() == grid.FREE
@@ -189,7 +200,7 @@ def plot_grid(drone, *, block=True):
     x_min = -(grid.width // 2) - 0.5
     y_min = -(grid.height // 2) - 0.5
 
-    figure, axes = plt.subplots()
+    figure, axes = plt.subplots(layout="constrained")
     image = axes.imshow(
         cell_colors.T, origin="lower", interpolation="nearest",
         cmap=ListedColormap(["#222222", "#adc4f0", "#ffffff"]),
@@ -198,10 +209,17 @@ def plot_grid(drone, *, block=True):
     )
     colorbar = figure.colorbar(image, ax=axes, ticks=[0, 1, 2])
     colorbar.ax.set_yticklabels(["Non-free", "Clearance buffer", "Traversable"])
-    axes.scatter(*drone.start, color="blue", label="Start")
-    axes.scatter(*drone.goal, color="magenta", marker="*", label="Goal")
+    axes.scatter(*drone.start, color="blue", label="Start", zorder=4)
+    axes.scatter(*drone.goal, color="magenta", marker="*", label="Goal", zorder=4)
     if drone.route is not None:
         axes.plot(*drone.route.T, color="darkorange", label="Planned route")
+    if waypoint_positions is not None and waypoint_speeds is not None:
+        markers = axes.scatter(
+            *waypoint_positions.T, c=waypoint_speeds, cmap=WAYPOINT_SPEED_COLORS,
+            vmin=0, vmax=waypoint_speeds.max() or 1.0, s=20, zorder=3,
+        )
+        figure.colorbar(markers, ax=axes, orientation="horizontal",
+                        label="Waypoint speed (px/tick)")
     axes.set(xlabel="World x (px)", ylabel="World y (px)",
              title="Occupancy grid and navigation clearance")
     axes.legend()
@@ -223,12 +241,19 @@ def main():
         validate_scenario(drone)
         if args.check:
             return
+        waypoint_data = {}
+        if drone.route is not None:
+            waypoint_data = {
+                "waypoint_positions": drone.path_follower.positions,
+                "waypoint_speeds": drone.path_follower.speeds,
+            }
         if args.grid_only:
-            plot_grid(drone)
+            plot_grid(drone, **waypoint_data)
             return
         if drone.route is None:
             print("No planner yet: holding start. Implement plan_path() to supply a route.")
-        print("Magenta: goal. Orange: planned route. Cyan: flown trajectory.")
+        print("Orange: planned route. Purple to green dots: slow to fast waypoints.")
+        print("Cyan: flown trajectory. Magenta: goal.")
         print("Follower corner handling remains unvalidated for future A* routes.")
         gui = GuiSR(the_map=the_map, headless=args.headless, use_mouse_measure=True)
         plot_process = None
@@ -240,7 +265,8 @@ def main():
                 route=drone.route,
             )
             plot_process = multiprocessing.get_context("spawn").Process(
-                target=plot_grid, args=(plot_data,), daemon=True,
+                target=plot_grid, args=(plot_data,),
+                kwargs=waypoint_data, daemon=True,
             )
             plot_process.start()
         try:
