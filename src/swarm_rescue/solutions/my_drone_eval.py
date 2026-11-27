@@ -1,18 +1,30 @@
-from swarm_rescue.solutions.my_drone_random import MyDroneRandom
-from swarm_rescue.solutions.my_drone_lidar_communication import MyDroneLidarCommunication
-from swarm_rescue.solutions.my_drone_motionless import MyDroneMotionless
-from swarm_rescue.solutions.my_drone_basic_control import MyDroneBasicControl
-from swarm_rescue.solutions.my_drone_bad_control import MyDroneBadControl
+from swarm_rescue.solutions.control import PDController
+from swarm_rescue.solutions.drone import RescueDrone
+from swarm_rescue.solutions.localisation import MeasuredState, SemanticState
+from swarm_rescue.solutions.mapping import LidarMapper
+from swarm_rescue.solutions.mission_planner import GlobalPlanner
+from swarm_rescue.solutions.path_follower import PathFollower
 
+# NB: constants for testing, might want to move these elsewhere 
+# for cleanless
 
-class MyDroneEval(MyDroneBadControl):
-    """
-    Evaluation drone class that inherits from MyDroneRandom.
+### Map exploration constants ###
+FRONTIER_UPDATE_INTERVAL = 100 # whatever happens, frontier is updated every x ticks; which causes recalculation of exploration waypoint as well
+ARRIVAL_THRESHOLD = 50 # distance threshold to frontier exploration waypoint
+MINIMUM_CLUSTER_SIZE = 50 # minimum cluster size to define a frontier
+MINIMUM_DISTANCE = MINIMUM_CLUSTER_SIZE + 0 # minimum distance to drone for our waypoint candidates for frontier exploration. NB needs to be bigger than arrival threshold
 
-    This class can be extended to implement custom evaluation logic.
-    """
+def drone_components(*, heading_goal=None):
+    return {
+        "planner": GlobalPlanner(),
+        "estimator": MeasuredState(),
+        "semantic_state": SemanticState(),
+        "controller": PDController(heading_goal=heading_goal),
+        "mapper": LidarMapper(frontier_update_interval=FRONTIER_UPDATE_INTERVAL),
+        "path_follower":PathFollower()
+    }
 
+class MyDroneEval(RescueDrone):
     def __init__(self, **kwargs):
-        super().__init__(goal=(150.0, 100.0), **kwargs)
-
-
+        super().__init__(**drone_components(), **kwargs)
+        # super().__init__(**kwargs)
