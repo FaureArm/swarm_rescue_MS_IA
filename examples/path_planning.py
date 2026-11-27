@@ -1,7 +1,7 @@
 """Known-map A* development scenario, independent of exploration and Kalman.
 
 Run: SWARM_RESCUE_USE_SHADERS=1 SWARM_RESCUE_ALLOW_TRUE_STATE=1 uv run --no-sync python -m examples.path_planning
-Add --check for setup validation, or --grid-only to inspect the occupancy map.
+Add --check for setup validation, or --grid-only to inspect navigation clearance.
 Ground truth is deliberately used only in this debug scenario. No route is
 supplied until plan_path() is implemented. No grasping/rescue mission runs.
 """
@@ -24,6 +24,7 @@ from swarm_rescue.solutions.control import PDController
 from swarm_rescue.solutions.data_types import (
     Activity, MissionDecision, MotionReference, OccupancyGrid, Waypoint,
 )
+from swarm_rescue.solutions.navigation import build_traversable_mask
 from swarm_rescue.solutions.path_follower import PathFollower
 
 
@@ -179,19 +180,30 @@ def validate_scenario(drone):
 
 def plot_grid(drone, *, block=True):
     import matplotlib.pyplot as plt
+    from matplotlib.colors import ListedColormap
 
     grid = drone.grid
+    known_free = grid.classify_cells() == grid.FREE
+    traversable = build_traversable_mask(grid)
+    cell_colors = np.where(traversable, 2, np.where(known_free, 1, 0))
+    x_min = -(grid.width // 2) - 0.5
+    y_min = -(grid.height // 2) - 0.5
+
     figure, axes = plt.subplots()
-    axes.imshow((grid.classify_cells() == grid.FREE).T, origin="lower",
-                cmap="gray", vmin=0, vmax=1, interpolation="nearest",
-                extent=(-grid.width // 2 - 0.5, grid.width // 2 - 0.5,
-                        -grid.height // 2 - 0.5, grid.height // 2 - 0.5))
+    image = axes.imshow(
+        cell_colors.T, origin="lower", interpolation="nearest",
+        cmap=ListedColormap(["#222222", "#adc4f0", "#ffffff"]),
+        vmin=-0.5, vmax=2.5,
+        extent=(x_min, x_min + grid.width, y_min, y_min + grid.height),
+    )
+    colorbar = figure.colorbar(image, ax=axes, ticks=[0, 1, 2])
+    colorbar.ax.set_yticklabels(["Non-free", "Clearance buffer", "Traversable"])
     axes.scatter(*drone.start, color="blue", label="Start")
     axes.scatter(*drone.goal, color="magenta", marker="*", label="Goal")
     if drone.route is not None:
         axes.plot(*drone.route.T, color="darkorange", label="Planned route")
     axes.set(xlabel="World x (px)", ylabel="World y (px)",
-             title="Known occupancy grid (raw obstacles, no clearance inflation)")
+             title="Occupancy grid and navigation clearance")
     axes.legend()
     plt.show(block=block)
     return figure
