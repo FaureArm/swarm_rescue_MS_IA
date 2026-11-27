@@ -1,7 +1,7 @@
 import numpy as np
 
 from swarm_rescue.solutions.data_types import MissionDecision, Activity, Waypoint, MotionReference
-from swarm_rescue.solutions.mapping import LidarMapper
+from swarm_rescue.solutions.mapper import LidarMapper
 from swarm_rescue.solutions.path_follower import PathFollower
 from swarm_rescue.solutions.explorer import Explorer
 from swarm_rescue.solutions.localisation import MeasuredState, SemanticState
@@ -48,6 +48,7 @@ class GlobalPlanner:
                estimator:MeasuredState, 
                semantic_state:SemanticState, 
                mapper:LidarMapper,
+               explorer:Explorer,
                path_follower:PathFollower) -> MissionDecision:
         """Call child method, depending on the affected mission
         """
@@ -55,6 +56,7 @@ class GlobalPlanner:
         return self.mission.decide(estimator, 
                                    semantic_state, 
                                    mapper,
+                                   explorer,
                                    path_follower)
 
 
@@ -79,6 +81,7 @@ class ExplorationMission(Mission):
                estimator:MeasuredState, 
                semantic_state:SemanticState, # useless here
                mapper:LidarMapper,
+               explorer:Explorer,
                path_follower:PathFollower) -> MissionDecision:
 
         if estimator.position_ is None or path_follower is None:
@@ -91,7 +94,7 @@ class ExplorationMission(Mission):
 
         if self.goal is None or need_waypoint_update:
             # PM TODO : explorer entry point - switch mapper to explorer
-            next_point = mapper.select_exploration_waypoint(estimator.position_)
+            next_point = explorer.select_exploration_waypoint(estimator.position_)
 
             if next_point is not None:
                 path_follower.set_path(path=[Waypoint(next_point[0], next_point[1], 10, None),],
@@ -131,6 +134,7 @@ class RescueMission(Mission):
                estimator:MeasuredState, # useless here
                semantic_state:SemanticState, 
                mapper:LidarMapper,
+               explorer:Explorer,
                path_follower:PathFollower # useless here
                ) -> MissionDecision:
         """Always set grasper to 1 when rescuing
@@ -149,7 +153,7 @@ class DropMission(Mission):
         self.goal = goal
         self.is_first_mission = True
 
-    def update_goal(self, estimator:MeasuredState, path_follower:PathFollower) -> tuple:
+    def update_goal(self, estimator:MeasuredState, mapper:LidarMapper, explorer:Explorer, path_follower:PathFollower) -> tuple:
         """_summary_
 
         Args:
@@ -163,22 +167,17 @@ class DropMission(Mission):
         
         # check if a path has been given
         if not path_follower.has_path:
-            path = [
-                Waypoint(-310, -180, 20, None),
-                Waypoint(-310, 170, 20, None),
-                Waypoint(-50, 170, 20, None),
-                Waypoint(-50, -180, 20, None),
-                Waypoint(20, -180, 20, None),
-                Waypoint(80, -180, 20, None),
-                # last waypoint is the rescue center adress
-                Waypoint(self.goal[0], self.goal[1], 3, None)
-            ]
+            # follow the past journey in reverse mode 
+            # to come back to the spawn point
+            path = []
+            for waypoint in explorer.journey[::-1]:
+                path.append(Waypoint(waypoint[0], waypoint[1], 20, None))
 
-            path_follower.set_path(path=path,
-                                lookahead=80.0,
-                                gain=0.05,
-                                max_pos=5.0,
-                                max_vel=10,)
+                path_follower.set_path(path=path,
+                                    lookahead=80.0,
+                                    gain=0.05,
+                                    max_pos=5.0,
+                                    max_vel=10,)
         
         return path_follower.update(estimator)
     
@@ -187,6 +186,7 @@ class DropMission(Mission):
                estimator:MeasuredState,
                semantic_state:SemanticState, # useless here
                mapper:LidarMapper,
+               explorer:Explorer,
                path_follower:PathFollower
                ) -> MissionDecision:
         """_summary_
@@ -208,7 +208,7 @@ class DropMission(Mission):
         if estimator.position_ is None:
             return MissionDecision(None, 1, Activity.SEARCHING_RESCUE_CENTER)
     
-        motion_reference = self.update_goal(estimator, path_follower)
+        motion_reference = self.update_goal(estimator, mapper, explorer, path_follower)
 
         # PM: different reaching thresholds between waypoints and rescue center
         approaching_rescue_center = (

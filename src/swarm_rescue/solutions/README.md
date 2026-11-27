@@ -15,7 +15,7 @@ waypoint mission remains available for experiments.
 | `mission_planner.py` | Contains `FrontierExplorationMission`, which reselects a goal on frontier refresh or arrival, and the manual `WaypointMission`. Both return a `MissionDecision` containing destination and grasper intent. |
 | `data_types.py` | Contains `OccupancyGrid` with bounded evidence, observation history, four-state classification and a frontier-cell mask; also `MissionDecision` and the currently unused `Waypoint` type. |
 | `control.py` | Contains the PD waypoint controller: calculates forward/lateral thrust and rotation from the target, measured position, velocity and heading. Limits thrust and holds the initial heading unless another is supplied. |
-| `mapping.py` | Contains `LidarMapper`: updates occupied pixels and the occupancy grid, caches frontiers, groups clusters and selects free-cell candidate waypoints. Current experiments use ground-truth pose. |
+| `mapper.py` | Contains `LidarMapper`: updates occupied pixels and the occupancy grid, caches frontiers, groups clusters and selects free-cell candidate waypoints. Current experiments use ground-truth pose. |
 | `debug_draw.py` | Draws the goal and map pixels in the simulator; the Matplotlib occupancy plot shows frontier cells, all eligible per-cluster candidates and the chosen goal. |
 | `my_drone_map_building.py` | Keeps the existing `MyDroneMapper` class name for scripts that use it; creates a `RescueDrone` with mapping enabled. |
 | `navigation.py` | Empty for now. Will contain route planning and path following to turn a mission destination into the next motion target. |
