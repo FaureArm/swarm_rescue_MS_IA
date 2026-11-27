@@ -79,6 +79,11 @@ class OccupancyGrid:
         if not np.isfinite(timestep) or timestep < 0:
             raise ValueError("Observation timestep must be finite and nonnegative")
 
+        # inflate obstalces
+        if pos_hit:
+            offsets_x, offsets_y = np.meshgrid([-1, 0, 1], [-1, 0, 1])
+            x = np.asarray(x)[..., None] + offsets_x.ravel()
+            y = np.asarray(y)[..., None] + offsets_y.ravel()
         grid_x, grid_y, in_bounds = self.world_to_grid(x, y)
 
         if not np.any(in_bounds):

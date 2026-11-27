@@ -9,6 +9,8 @@ from swarm_rescue.solutions.mapper_aristide import Mapper_Aristide
 from swarm_rescue.solutions.explorer_aristide import Explorer_Aristide
 from swarm_rescue.solutions.mission_planner import GlobalPlanner
 from swarm_rescue.solutions.path_follower import PathFollower
+from swarm_rescue.solutions.Astar import AstartPlanner
+from swarm_rescue.solutions.navigation import Navigator
 
 # NB: constants for testing, might want to move these elsewhere 
 # for cleanless
@@ -23,8 +25,10 @@ def drone_components(*, heading_goal=None):
     #     # PM TODO : Armand's algorithm 
     # mapper = LidarMapper(frontier_update_interval=FRONTIER_UPDATE_INTERVAL)
         # PM TODO : Aristide's algorithm 
-    mapper = Mapper_Aristide(frontier_update_interval=FRONTIER_UPDATE_INTERVAL)
+    mapper = LidarMapper(frontier_update_interval=FRONTIER_UPDATE_INTERVAL)
     estimator = MeasuredState()
+    path_follower = PathFollower()
+    navigator = Navigator(AstartPlanner(clearance_px=25, max_speed=5, min_speed=1),path_follower)
     return {
         "planner": GlobalPlanner(),
         "estimator": estimator,
@@ -34,8 +38,9 @@ def drone_components(*, heading_goal=None):
     #     # PM TODO : Armand's algorithm 
         # "explorer": Explorer(mapper),
         # PM TODO : Aristide's algorithm 
-        "explorer": Explorer_Aristide(mapper, estimator),
-        "path_follower":PathFollower()
+        "explorer": Explorer(mapper),
+        "path_follower": path_follower,
+        "navigator": navigator,
     }
 
 class MyDroneEval(RescueDrone):

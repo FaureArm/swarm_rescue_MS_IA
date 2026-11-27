@@ -32,7 +32,7 @@ def build_traversable_mask(
 class AstartPlanner():
     def __init__(self, *, clearance_px = 25.0, max_speed = 20, min_speed = 1):
         self.clearance_px = clearance_px
-        self.current_route = None
+        self.current_route: np.ndarray | None = None
         self.max_speed_ = max_speed
         self.min_speed_ = min_speed
 
@@ -42,6 +42,7 @@ class AstartPlanner():
 
     def plan_path(self, grid: OccupancyGrid, start: np.ndarray, goal: np.ndarray) -> np.ndarray | None:
         """Return world-coordinate waypoints, or None if no route exists"""
+        self.current_route = None
         #TODO: Perhaps could try to adapt to accepts waypoints directly
         start = np.asarray(start, dtype=float)
         goal = np.asarray(goal, dtype=float) # 'final target'
@@ -64,12 +65,19 @@ class AstartPlanner():
         goal_cell = (int(world_frame_goal_x), int(world_frame_goal_y))
         states = grid.classify_cells()
         if not (mask[start_cell] and mask[goal_cell]):
+            print("A* rejected an endpoint:",
+                "start", start, states[start_cell], mask[start_cell],
+                "base", goal, states[goal_cell], mask[goal_cell])
+            return None
+        if not (mask[start_cell] and mask[goal_cell]):
             return None
 
         if start_cell == goal_cell:
             if np.array_equal(start, goal):
-                return start[None, :]
-            return np.stack((start, goal))
+                self.current_route = start[None, :]
+            else:
+                self.current_route = np.stack((start, goal))
+            return self.current_route
 
         # NB: our mask uses [x, y]but the imported library reads 
         # its matrix as [y, x], so we need to switch
@@ -90,6 +98,7 @@ class AstartPlanner():
         route = np.array([(node.x, node.y) for node in nodes], dtype=float) - origin
         # world to grid func rounds values, so we replace actually known values at least
         route[0], route[-1] = start, goal
+        self.current_route = route
         return route
 
     def extract_waypoints(self, route: np.ndarray, step = 10) -> list[Waypoint]:

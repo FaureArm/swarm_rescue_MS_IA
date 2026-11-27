@@ -11,7 +11,7 @@ from swarm_rescue.solutions.explorer import Explorer
 from swarm_rescue.solutions.mapper_aristide import Mapper_Aristide
 from swarm_rescue.solutions.explorer_aristide import Explorer_Aristide
 from swarm_rescue.solutions.path_follower import PathFollower
-
+from swarm_rescue.solutions.navigation import Navigator
 
 class RescueDrone(DroneAbstract):
     def __init__(self, *, 
@@ -26,6 +26,7 @@ class RescueDrone(DroneAbstract):
                  mapper:Mapper_Aristide,
                  explorer:Explorer_Aristide,
                  path_follower:PathFollower,
+                 navigator: Navigator,
                  **kwargs):
         super().__init__(**kwargs)
         self.planner = planner
@@ -35,6 +36,7 @@ class RescueDrone(DroneAbstract):
         self.mapper = mapper
         self.explorer = explorer
         self.path_follower = path_follower
+        self.navigator = navigator
 
         if self.mapper is not None and self.size_area is not None:
             self.mapper.set_map_size(self.size_area)
@@ -64,24 +66,25 @@ class RescueDrone(DroneAbstract):
         # self.mapper.update_occupancy_grid(self.estimator.position_, self.estimator.yaw_, ranges, angles, self.elapsed_timestep)
         
         # # PM TODO : remove before deliver - use of true position / compass
-        # self.mapper.update_lidar_map(self.true_position(), self.true_angle(), ranges, angles)
-        # self.mapper.update_occupancy_grid(self.true_position(), self.true_angle(), ranges, angles, self.elapsed_timestep)
-        # if self.elapsed_timestep % 10 == 0:
-        #     self.debug_draw.plot_occupancy_grid()
+        self.mapper.update_lidar_map(self.true_position(), self.true_angle(), ranges, angles)
+        self.mapper.update_occupancy_grid(self.true_position(), self.true_angle(), ranges, angles, self.elapsed_timestep)
+        if self.elapsed_timestep % 10 == 0:
+            self.debug_draw.plot_occupancy_grid(
+                self.navigator.path_planner,
+                start=self.estimator.position_,
+                goal=self.semantic_state.rescue_center_position,
+            )
 
         # PM TODO : Aristide's mapper algorithm 
-        self.explorer.scan(ranges, angles, self.estimator.position_, self.estimator.yaw_)
+        #self.explorer.scan(ranges, angles, self.estimator.position_, self.estimator.yaw_)
 
-        decision = self.planner.decide(self.estimator, self.semantic_state, self.mapper, self.explorer, self.path_follower)
+        decision = self.planner.decide(
+            self.estimator, self.semantic_state, self.mapper, self.explorer,
+            self.path_follower, navigator=self.navigator,
+        )
 
-        if decision.motion_reference.target is None:
-            return {"forward": 0.0, "lateral": 0.0, "rotation": 0.0, "grasper": 0}
-
-        # # update occupancy grid plot
-        # if (
-        #     self.mapper is not None
-        # ):
-        #     self.debug_draw.plot_occupancy_grid()
+        if decision.motion_reference is None or decision.motion_reference.target is None:
+            return {"forward": 0.0, "lateral": 0.0, "rotation": 0.0, "grasper": decision.grasper}
 
         # Direct-to-target flight until a working Navigator is introduced.
         return self.controller.control(decision, self.estimator)

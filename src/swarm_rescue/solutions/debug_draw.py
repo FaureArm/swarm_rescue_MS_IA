@@ -1,6 +1,7 @@
 import arcade
 import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib.colors import ListedColormap
 
 
 class DebugDraw:
@@ -59,8 +60,8 @@ class DebugDraw:
         fig.canvas.draw_idle()
         fig.canvas.flush_events()
 
-    def plot_occupancy_grid(self):
-        """Create or refresh a separate, nonblocking occupancy-map window.
+    def plot_occupancy_grid(self, path_planner, *, start, goal):
+        """Show the occupancy grid and the current A* traversability mask.
 
         Unknown cells are gray, uncertain cells light gray, free cells white,
         and occupied cells black. Cached frontier cells are green.
@@ -73,6 +74,10 @@ class DebugDraw:
         # OccupancyGrid currently stores its values as [x, y]; imshow uses [y, x].
         grid = self.mapper.occupancy_grid_
         states = grid.classify_cells().T
+        traversable = path_planner.get_traversable_mask(grid).T
+        mask_pixels = np.zeros_like(states)
+        mask_pixels[states == grid.FREE] = 1
+        mask_pixels[traversable] = 2
         height, width = states.shape
         pixels = np.full((height, width, 3), 0.5, dtype=np.float32)
         pixels[states == grid.UNCERTAIN] = 0.75
@@ -91,7 +96,9 @@ class DebugDraw:
             self._occupancy_plot[0].number
         ):
             plt.ion()
-            fig, ax = plt.subplots()
+            fig, (ax, mask_ax) = plt.subplots(
+                1, 2, figsize=(12, 5), sharex=True, sharey=True, layout="constrained",
+            )
             image = ax.imshow(
                 pixels, origin="lower",
                 interpolation="nearest", extent=extent,
@@ -114,13 +121,57 @@ class DebugDraw:
                 label="Selected waypoint", zorder=4,
             )
             ax.legend(loc="upper right")
-            self._occupancy_plot = fig, ax, image, candidates, selected
+
+            mask_image = mask_ax.imshow(
+                mask_pixels, origin="lower", interpolation="nearest", extent=extent,
+                cmap=ListedColormap(["#222222", "#adc4f0", "#ffffff"]),
+                vmin=-0.5, vmax=2.5,
+            )
+            mask_ax.set_aspect("equal")
+            mask_ax.set_xlabel("Grid x (px)")
+            start_marker = mask_ax.scatter(
+                [], [], c="deepskyblue", edgecolors="black", zorder=3, label="Drone estimate",
+            )
+            goal_marker = mask_ax.scatter(
+                [], [], c="magenta", edgecolors="black", marker="*", s=100,
+                zorder=3, label="Rescue center",
+            )
+            route_line, = mask_ax.plot(
+                [], [], color="darkorange", linewidth=2, marker="o", markevery=[-1],
+                markersize=5, label="A* route",
+            )
+            mask_ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.13), ncols=3)
+            self._occupancy_plot = (
+                fig, ax, image, candidates, selected, mask_image, start_marker, goal_marker,
+                route_line,
+            )
             plt.show(block=False)
 
-        fig, ax, image, candidates, selected = self._occupancy_plot
+        (
+            fig, ax, image, candidates, selected, mask_image, start_marker, goal_marker,
+            route_line,
+        ) = self._occupancy_plot
         image.set_data(pixels)
         image.set_extent(extent)
+        mask_image.set_data(mask_pixels)
+        mask_image.set_extent(extent)
+        mask_image.axes.set_title(
+            f"A* mask ({path_planner.clearance_px:g} px clearance)\n"
+            "White: traversable, blue: clearance buffer, dark: non-free"
+        )
+        for marker, point in ((start_marker, start), (goal_marker, goal)):
+            offsets = np.empty((0, 2))
+            if point is not None:
+                x, y, in_bounds = grid.world_to_grid(*point)
+                if in_bounds:
+                    offsets = [[x, y]]
+            marker.set_offsets(offsets)
+
         origin = np.array([grid.width // 2, grid.height // 2])
+        if path_planner.current_route is None:
+            route_line.set_data([], [])
+        else:
+            route_line.set_data(*(path_planner.current_route + origin).T)
         candidates.set_offsets(self.mapper.frontier_waypoints_ + origin)
         selected.set_offsets(
             np.empty((0, 2)) if self.goal is None
