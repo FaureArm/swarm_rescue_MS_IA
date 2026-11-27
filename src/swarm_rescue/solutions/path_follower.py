@@ -1,20 +1,23 @@
 "Define path following control law"
 
-from collections.abc import Sequence
-
 import numpy as np
 
-from swarm_rescue.solutions.data_types import MotionReference, Waypoint
+from swarm_rescue.solutions.data_types import MotionReference
 from swarm_rescue.solutions.localisation import MeasuredState
 
 class PathFollower:
-    def __init__(self, path, lookahead, gain, max_pos, max_vel):
+    def __init__(self):
+        self.index = 0
+        # flag if a path has been set
+        # to be reset each time a path is completed
+        self.has_path = False
+
+    def set_path(self, path, lookahead, gain, max_pos, max_vel):
         self.path_ = list(path) # path of waypoints to follow, final waypoint is final destination
         self.lookahead_ = lookahead # lookahead in pixels, could also implement in nber of waypoints/index?
         self.position_gain_  = gain # 
         self.max_pos_ = max_pos # maximum positon tolerance for arrival # TODO change name?
         self.max_vel_ = max_vel # maximum velocity at arrival #TODO same change name?
-        self.index = 0
 
         self.positions = np.array(
             [(waypoint.x, waypoint.y) for waypoint in self.path_], dtype=float
@@ -26,8 +29,11 @@ class PathFollower:
             None if waypoint.heading is None else float(waypoint.heading)
             for waypoint in self.path_
         ]
+        # set to True now the path is set and reset index
+        self.index = 0
+        self.has_path = True
 
-    def update(self, estimate) -> MotionReference:
+    def update(self, estimate:MeasuredState) -> MotionReference:
         """path following module update function. At each uptade,
         checks the current waypoint to follow in path, and returns
         control targets
@@ -39,14 +45,21 @@ class PathFollower:
             MotionReference: return to control module, what should currently target
             at timestep t
         """
+               
         # need current drone position to check against
         # where we are in the path
         position = np.asarray(estimate.position_, dtype=float)
 
-        while True:
+        while self.index < len(self.positions):
             # we calculate the segment between our two next waypoints
             start = self.positions[self.index]
-            end = self.positions[self.index + 1]
+
+            # one waypoint path ?
+            if len(self.positions) == 1:
+                end = self.positions[self.index]
+            else:
+                end = self.positions[self.index + 1]
+
             segment = end - start
 
             # check if we have passed the current waypoint
@@ -61,6 +74,17 @@ class PathFollower:
             # if we pass the segment, then we are at the next waypoint
             # so we update our index
             self.index += 1
+
+        # the path is completed
+        if self.index == len(self.positions):
+            # get out of the function and be ready to receive a new path
+            self.has_path = False
+            # and leave the drone motionless
+            return MotionReference(
+                target=estimate.position_,
+                velocity=0,
+                heading=None,
+            )
 
         ### Now we need to figure out the desired velocity and pos###
         
@@ -101,7 +125,7 @@ class PathFollower:
 
         # return for controller
         return MotionReference(
-            position=target,
+            target=target,
             velocity=velocity,
             heading=None,
         )

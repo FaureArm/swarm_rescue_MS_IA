@@ -1,14 +1,33 @@
 """Shared data structures for the drone's components."""
 
+from enum import Enum
 from typing import NamedTuple
 
 import numpy as np
 
+class Activity(Enum):
+    """
+    All the states of the drone as a state machine
+    """
+    STAND_BY = -1
+    EXPLORING = 0
+    SEARCHING_WOUNDED = 1
+    GRASPING_WOUNDED = 2
+    SEARCHING_RESCUE_CENTER = 3
+    DROPPING_AT_RESCUE_CENTER = 4
+
+
+class MotionReference(NamedTuple):
+    target: np.ndarray       # lookahead point, useful for display
+    velocity: np.ndarray       # desired world-frame velocity vector
+    heading: float | None
+
 
 class MissionDecision(NamedTuple):
     # small class to hold decisions and reuse easily
-    destination: np.ndarray | None
+    motion_reference: MotionReference
     grasper: int
+    role: Activity
 
 
 class Waypoint(NamedTuple):
@@ -25,10 +44,7 @@ class Waypoint(NamedTuple):
     velocity: float
     heading: float | None # for now might not use heading due to holonomic nature
 
-class MotionReference(NamedTuple):
-    position: np.ndarray       # lookahead point, useful for display
-    velocity: np.ndarray       # desired world-frame velocity vector
-    heading: float | None
+
 class OccupancyGrid:
     """class to hold grid occupancy probabilistic map.
     probability are loggits, so a value of 0 for the log_odds att means 50% proba
