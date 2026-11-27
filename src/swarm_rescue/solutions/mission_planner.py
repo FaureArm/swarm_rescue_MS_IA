@@ -47,14 +47,15 @@ class GlobalPlanner:
     def decide(self, 
                estimator:MeasuredState, 
                semantic_state:SemanticState, 
+               mapper:LidarMapper,
                path_follower:PathFollower) -> MissionDecision:
         """Call child method, depending on the affected mission
         """
         
         return self.mission.decide(estimator, 
                                    semantic_state, 
+                                   mapper,
                                    path_follower)
-
 
 
 
@@ -62,6 +63,7 @@ class ExplorationMission(Mission):
     """Refresh exploration goals when frontiers change or the goal is reached."""
     def __init__(self):
         self.goal = None
+        self.motion_reference = None
         # # PM TODO: to remove once the exploration system is plugged
         # self.exploration_path = [(20, -180),(-50, -180),(-50, 170),(-310, 170),(-310, -180),]
         # self.index = -1
@@ -69,23 +71,6 @@ class ExplorationMission(Mission):
     def update_goal(self, 
                     estimator:MeasuredState, 
                     path_follower:PathFollower) -> MotionReference:
-
-        # check if a path has been given
-        if not path_follower.has_path:
-            path = [
-                Waypoint(80, -180, 20, None),
-                Waypoint(20, -180, 20, None),
-                Waypoint(-50, -180, 20, None),
-                Waypoint(-50, 170, 20, None),
-                Waypoint(-310, 170, 20, None),
-                Waypoint(-310, -180, 20, None),
-            ]
-
-            path_follower.set_path(path=path,
-                                lookahead=80.0,
-                                gain=0.05,
-                                max_pos=5.0,
-                                max_vel=10,)
         
         return path_follower.update(estimator)
 
@@ -93,15 +78,33 @@ class ExplorationMission(Mission):
     def decide(self, 
                estimator:MeasuredState, 
                semantic_state:SemanticState, # useless here
+               mapper:LidarMapper,
                path_follower:PathFollower) -> MissionDecision:
 
         if estimator.position_ is None or path_follower is None:
             return MissionDecision(None, 0, Activity.EXPLORING)
 
-        motion_reference = self.update_goal(estimator, path_follower)
-        self.goal = motion_reference.target
+        need_waypoint_update = (
+            self.goal is not None
+            and np.linalg.norm(self.goal - estimator.position_) < EXPLORATION_THRESHOLD
+        )
 
-        return MissionDecision(motion_reference, 0, Activity.EXPLORING)
+        if self.goal is None or need_waypoint_update:
+            # PM TODO : explorer entry point - switch mapper to explorer
+            next_point = mapper.select_exploration_waypoint(estimator.position_)
+
+            if next_point is not None:
+                path_follower.set_path(path=[Waypoint(next_point[0], next_point[1], 10, None),],
+                                        lookahead=80.0,
+                                        gain=0.05,
+                                        max_pos=5.0,
+                                        max_vel=10,)
+
+            self.motion_reference = self.update_goal(estimator, path_follower)
+
+            self.goal = self.motion_reference.target
+
+        return MissionDecision(self.motion_reference, 0, Activity.EXPLORING)
 
 
     
@@ -127,6 +130,7 @@ class RescueMission(Mission):
     def decide(self, 
                estimator:MeasuredState, # useless here
                semantic_state:SemanticState, 
+               mapper:LidarMapper,
                path_follower:PathFollower # useless here
                ) -> MissionDecision:
         """Always set grasper to 1 when rescuing
@@ -182,6 +186,7 @@ class DropMission(Mission):
     def decide(self, 
                estimator:MeasuredState,
                semantic_state:SemanticState, # useless here
+               mapper:LidarMapper,
                path_follower:PathFollower
                ) -> MissionDecision:
         """_summary_
@@ -223,7 +228,6 @@ class DropMission(Mission):
         elif rescue_center_reached:
             return MissionDecision(motion_reference, 0, Activity.DROPPING_AT_RESCUE_CENTER)
         
-
         return MissionDecision(motion_reference, 1, Activity.SEARCHING_RESCUE_CENTER)
 
 
@@ -233,9 +237,10 @@ class StandBy(Mission):
     """Stop the drone at its last position."""
 
     def decide(self, 
-               estimator:MeasuredState, 
-               semantic_state:SemanticState,  # useless here
-               mapper:LidarMapper # useless here
+               estimator:MeasuredState,
+               semantic_state:SemanticState, # useless here
+               mapper:LidarMapper,
+               path_follower:PathFollower
                ) -> MissionDecision:
         """Always set grasper to 1 when rescuing
         """

@@ -16,6 +16,8 @@ class LidarMapper:
         self.frontier_waypoints_ = np.empty((0, 2), dtype=float)
         self.frontier_update_interval_ = frontier_update_interval
         self.drone_spawn_position = None
+        self.lidar_free_zip_range_angle = None
+        self.previous_waypoint = None
 
     def set_map_size(self, map_size):
         """Set the playground dimensions and recreate the grid before mapping starts."""
@@ -56,9 +58,13 @@ class LidarMapper:
         # we get rays that are of beyond the max range
         valid = np.isfinite(ranges) & (ranges > self.max_lidar_range_)
 
+
         bearings = yaw + angles[valid]
         directions = np.column_stack((np.cos(bearings), np.sin(bearings)))
         empties = drone_position + self.max_lidar_range_ * directions
+
+        self.lidar_free_bearings = bearings
+
         return np.rint(empties).astype(int)
 
 
@@ -205,8 +211,8 @@ class LidarMapper:
     def update_frontier_waypoints(
         self,
         drone_position,
-        minimum_cluster_size=5,
-        minimum_distance=10.0,
+        minimum_cluster_size,
+        minimum_distance,
     ):
         """Cache one eligible world-coordinate waypoint per frontier cluster."""
         clusters = self.find_frontier_clusters(minimum_cluster_size=minimum_cluster_size)
@@ -237,8 +243,8 @@ class LidarMapper:
     def select_exploration_waypoint(
         self,
         drone_position,
-        minimum_cluster_size=5,
-        minimum_distance=50.0,
+        minimum_cluster_size=50,
+        minimum_distance=10.0,
     ):
         """Refresh candidates and return a copy of the nearest waypoint, or None."""
         waypoints = self.update_frontier_waypoints(
@@ -252,5 +258,20 @@ class LidarMapper:
 
         # so far we use distance to determine the waypoint we choose
         #TODO: try other methods
-        distances = np.linalg.norm(waypoints - drone_position, axis=1)
-        return waypoints[np.argmax(distances)].copy()
+        for waypoint in waypoints:
+            waypoint_angle = np.atan2((waypoint[1] - drone_position[1]), (waypoint[0] - drone_position[0]))
+            
+            if (min(self.lidar_free_bearings) < waypoint_angle and max(self.lidar_free_bearings) > waypoint_angle):
+                # if self.previous_waypoint is None:
+                #     self.previous_waypoint = waypoint
+                break
+
+                # pursuit_angle = np.atan2((waypoint[1] - self.previous_waypoint[1]), (waypoint[0] - self.previous_waypoint[0]))
+
+                # # current candidate distant from the previous waypoint of less than 0.5 rad
+                # if pursuit_angle < 0.2:
+                #     self.previous_waypoint = waypoint
+                #     break
+
+        # distances = np.linalg.norm(waypoints - drone_position, axis=1)
+        return waypoint.copy()

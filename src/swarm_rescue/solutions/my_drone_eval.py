@@ -4,6 +4,7 @@ from swarm_rescue.solutions.localisation import MeasuredState, SemanticState
 from swarm_rescue.solutions.mapping import LidarMapper
 from swarm_rescue.solutions.mission_planner import GlobalPlanner
 from swarm_rescue.solutions.path_follower import PathFollower
+from swarm_rescue.solutions.exploration import DroneBis
 
 # NB: constants for testing, might want to move these elsewhere 
 # for cleanless

@@ -2,7 +2,7 @@
 
 import numpy as np
 
-from swarm_rescue.solutions.data_types import MotionReference
+from swarm_rescue.solutions.data_types import MotionReference, Waypoint
 from swarm_rescue.solutions.localisation import MeasuredState
 
 class PathFollower:
@@ -13,6 +13,7 @@ class PathFollower:
         self.has_path = False
 
     def set_path(self, path, lookahead, gain, max_pos, max_vel):
+
         self.path_ = list(path) # path of waypoints to follow, final waypoint is final destination
         self.lookahead_ = lookahead # lookahead in pixels, could also implement in nber of waypoints/index?
         self.position_gain_  = gain # 
@@ -45,20 +46,22 @@ class PathFollower:
             MotionReference: return to control module, what should currently target
             at timestep t
         """
-               
         # need current drone position to check against
         # where we are in the path
         position = np.asarray(estimate.position_, dtype=float)
 
-        while self.index < len(self.positions):
+        if self.positions.shape[0] == 1:
+            current_waypoint = Waypoint(estimate.position_[0], estimate.position_[1], 5, None)
+            self.path_.insert(0, current_waypoint)
+            self.set_path(self.path_, self.lookahead_, self.position_gain_, self.max_pos_, self.max_vel_ )
+
+        
+        path_size = self.positions.shape[0]
+
+        while self.index < path_size:
             # we calculate the segment between our two next waypoints
             start = self.positions[self.index]
-
-            # one waypoint path ?
-            if len(self.positions) == 1:
-                end = self.positions[self.index]
-            else:
-                end = self.positions[self.index + 1]
+            end = self.positions[self.index + 1]
 
             segment = end - start
 
@@ -68,7 +71,7 @@ class PathFollower:
             fraction = np.dot(position - start, segment) / np.dot(segment, segment)
             if (
                 fraction < 1.0
-                or self.index == len(self.positions) - 2
+                or self.index == path_size - 2
             ):
                 break
             # if we pass the segment, then we are at the next waypoint
@@ -76,7 +79,7 @@ class PathFollower:
             self.index += 1
 
         # the path is completed
-        if self.index == len(self.positions):
+        if self.index == path_size:
             # get out of the function and be ready to receive a new path
             self.has_path = False
             # and leave the drone motionless
@@ -103,8 +106,12 @@ class PathFollower:
         progress = np.clip(fraction, 0.0, 1.0)
 
         start_speed = self.path_[self.index].velocity
-        end_speed = self.path_[self.index + 1].velocity
-        next_waypoint = self.path_[self.index + 1]
+        if self.index == path_size:
+            end_speed = self.path_[self.index].velocity
+            next_waypoint = self.path_[self.index]
+        else:
+            end_speed = self.path_[self.index + 1].velocity
+            next_waypoint = self.path_[self.index + 1]
 
         # we differenriate when the next target speed is 0
         # normal solution would overshoot or too slow
