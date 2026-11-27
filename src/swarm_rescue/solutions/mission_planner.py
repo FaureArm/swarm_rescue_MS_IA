@@ -1,9 +1,13 @@
 import numpy as np
 
 from swarm_rescue.solutions.data_types import MissionDecision, Activity, Waypoint, MotionReference
-from swarm_rescue.solutions.mapping import LidarMapper
-from swarm_rescue.solutions.path_follower import PathFollower
+        # PM TODO : Armand's algorithm 
+from swarm_rescue.solutions.mapper import LidarMapper
 from swarm_rescue.solutions.explorer import Explorer
+        # PM TODO : Aristide's algorithm 
+from swarm_rescue.solutions.mapper_aristide import Mapper_Aristide
+from swarm_rescue.solutions.explorer_aristide import Explorer_Aristide
+from swarm_rescue.solutions.path_follower import PathFollower
 from swarm_rescue.solutions.localisation import MeasuredState, SemanticState
 
 EXPLORATION_THRESHOLD = 35.0 # exploration threshold
@@ -47,14 +51,21 @@ class GlobalPlanner:
     def decide(self, 
                estimator:MeasuredState, 
                semantic_state:SemanticState, 
+        # PM TODO : Armand's mapper algorithm 
+            #    mapper:LidarMapper,
+            #    explorer:Explorer,
+        # PM TODO : Aristide's algorithm 
+                 mapper:Mapper_Aristide,
+                 explorer:Explorer_Aristide,
                path_follower:PathFollower) -> MissionDecision:
         """Call child method, depending on the affected mission
         """
         
         return self.mission.decide(estimator, 
                                    semantic_state, 
+                                   mapper,
+                                   explorer,
                                    path_follower)
-
 
 
 
@@ -62,6 +73,7 @@ class ExplorationMission(Mission):
     """Refresh exploration goals when frontiers change or the goal is reached."""
     def __init__(self):
         self.goal = None
+        self.motion_reference = None
         # # PM TODO: to remove once the exploration system is plugged
         # self.exploration_path = [(20, -180),(-50, -180),(-50, 170),(-310, 170),(-310, -180),]
         # self.index = -1
@@ -69,23 +81,6 @@ class ExplorationMission(Mission):
     def update_goal(self, 
                     estimator:MeasuredState, 
                     path_follower:PathFollower) -> MotionReference:
-
-        # check if a path has been given
-        if not path_follower.has_path:
-            path = [
-                Waypoint(80, -180, 20, None),
-                Waypoint(20, -180, 20, None),
-                Waypoint(-50, -180, 20, None),
-                Waypoint(-50, 170, 20, None),
-                Waypoint(-310, 170, 20, None),
-                Waypoint(-310, -180, 20, None),
-            ]
-
-            path_follower.set_path(path=path,
-                                lookahead=80.0,
-                                gain=0.05,
-                                max_pos=5.0,
-                                max_vel=10,)
         
         return path_follower.update(estimator)
 
@@ -93,15 +88,52 @@ class ExplorationMission(Mission):
     def decide(self, 
                estimator:MeasuredState, 
                semantic_state:SemanticState, # useless here
+        # PM TODO : Armand's mapper algorithm 
+            #    mapper:LidarMapper,
+            #    explorer:Explorer,
+        # PM TODO : Aristide's algorithm 
+                 mapper:Mapper_Aristide,
+                 explorer:Explorer_Aristide,
                path_follower:PathFollower) -> MissionDecision:
 
         if estimator.position_ is None or path_follower is None:
             return MissionDecision(None, 0, Activity.EXPLORING)
 
-        motion_reference = self.update_goal(estimator, path_follower)
-        self.goal = motion_reference.target
+        need_waypoint_update = (
+            self.goal is not None
+            and np.linalg.norm(self.goal - estimator.position_) < EXPLORATION_THRESHOLD
+        )
 
-        return MissionDecision(motion_reference, 0, Activity.EXPLORING)
+        if self.goal is None or need_waypoint_update:
+            # PM TODO : explorer entry point - switch mapper to explorer
+
+
+        # # PM TODO : Armand's algorithm 
+        #     next_point = explorer.select_exploration_waypoint(estimator.position_)
+
+
+
+        # PM TODO : Aristide's algorithm 
+            next_point = None
+            next_point_list = explorer.select_exploration_waypoint()
+        # PM TODO : Aristide's algorithm 
+            if len(next_point_list) > 0:
+                next_point = next_point_list[0]
+
+            print("toto", next_point)
+            if next_point is not None:
+                path_follower.set_path(path=[Waypoint(next_point[0], next_point[1], 10, None),],
+                                        lookahead=80.0,
+                                        gain=0.05,
+                                        max_pos=5.0,
+                                        max_vel=10,)
+
+        # # # PM TODO : Armand's algorithm 
+        #     self.motion_reference = self.update_goal(estimator, path_follower)
+
+            # self.goal = self.motion_reference.target
+
+        return MissionDecision(self.motion_reference, 0, Activity.EXPLORING)
 
 
     
@@ -127,6 +159,12 @@ class RescueMission(Mission):
     def decide(self, 
                estimator:MeasuredState, # useless here
                semantic_state:SemanticState, 
+        # PM TODO : Armand's mapper algorithm 
+            #    mapper:LidarMapper,
+            #    explorer:Explorer,
+        # PM TODO : Aristide's algorithm 
+                 mapper:Mapper_Aristide,
+                 explorer:Explorer_Aristide,
                path_follower:PathFollower # useless here
                ) -> MissionDecision:
         """Always set grasper to 1 when rescuing
@@ -145,7 +183,14 @@ class DropMission(Mission):
         self.goal = goal
         self.is_first_mission = True
 
-    def update_goal(self, estimator:MeasuredState, path_follower:PathFollower) -> tuple:
+    def update_goal(self, estimator:MeasuredState, 
+        # PM TODO : Armand's mapper algorithm 
+                #    mapper:LidarMapper,
+                #    explorer:Explorer,
+        # PM TODO : Aristide's algorithm 
+                    mapper:Mapper_Aristide,
+                    explorer:Explorer_Aristide,
+                    path_follower:PathFollower) -> tuple:
         """_summary_
 
         Args:
@@ -159,22 +204,17 @@ class DropMission(Mission):
         
         # check if a path has been given
         if not path_follower.has_path:
-            path = [
-                Waypoint(-310, -180, 20, None),
-                Waypoint(-310, 170, 20, None),
-                Waypoint(-50, 170, 20, None),
-                Waypoint(-50, -180, 20, None),
-                Waypoint(20, -180, 20, None),
-                Waypoint(80, -180, 20, None),
-                # last waypoint is the rescue center adress
-                Waypoint(self.goal[0], self.goal[1], 3, None)
-            ]
+            # follow the past journey in reverse mode 
+            # to come back to the spawn point
+            path = []
+            for waypoint in explorer.journey[::-1]:
+                path.append(Waypoint(waypoint[0], waypoint[1], 20, None))
 
-            path_follower.set_path(path=path,
-                                lookahead=80.0,
-                                gain=0.05,
-                                max_pos=5.0,
-                                max_vel=10,)
+                path_follower.set_path(path=path,
+                                    lookahead=80.0,
+                                    gain=0.05,
+                                    max_pos=5.0,
+                                    max_vel=10,)
         
         return path_follower.update(estimator)
     
@@ -182,6 +222,12 @@ class DropMission(Mission):
     def decide(self, 
                estimator:MeasuredState,
                semantic_state:SemanticState, # useless here
+    # PM TODO : Armand's mapper algorithm 
+            #    mapper:LidarMapper,
+            #    explorer:Explorer,
+    # PM TODO : Aristide's algorithm 
+                mapper:Mapper_Aristide,
+                explorer:Explorer_Aristide,
                path_follower:PathFollower
                ) -> MissionDecision:
         """_summary_
@@ -203,7 +249,7 @@ class DropMission(Mission):
         if estimator.position_ is None:
             return MissionDecision(None, 1, Activity.SEARCHING_RESCUE_CENTER)
     
-        motion_reference = self.update_goal(estimator, path_follower)
+        motion_reference = self.update_goal(estimator, mapper, explorer, path_follower)
 
         # PM: different reaching thresholds between waypoints and rescue center
         approaching_rescue_center = (
@@ -223,7 +269,6 @@ class DropMission(Mission):
         elif rescue_center_reached:
             return MissionDecision(motion_reference, 0, Activity.DROPPING_AT_RESCUE_CENTER)
         
-
         return MissionDecision(motion_reference, 1, Activity.SEARCHING_RESCUE_CENTER)
 
 
@@ -233,9 +278,14 @@ class StandBy(Mission):
     """Stop the drone at its last position."""
 
     def decide(self, 
-               estimator:MeasuredState, 
-               semantic_state:SemanticState,  # useless here
-               mapper:LidarMapper # useless here
+               estimator:MeasuredState,
+               semantic_state:SemanticState, # useless here
+    # PM TODO : Armand's mapper algorithm 
+            #    mapper:LidarMapper,
+            #    explorer:Explorer,
+    # PM TODO : Aristide's algorithm 
+                mapper:Mapper_Aristide,
+                explorer:Explorer_Aristide,
                ) -> MissionDecision:
         """Always set grasper to 1 when rescuing
         """

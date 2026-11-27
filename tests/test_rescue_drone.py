@@ -8,7 +8,7 @@ from swarm_rescue.simulation.gui_map.closed_playground import ClosedPlayground
 from swarm_rescue.simulation.utils.misc_data import MiscData
 from swarm_rescue.simulation.utils.true_state_guard import TrueStateAccessError
 from swarm_rescue.solutions.drone import RescueDrone
-from swarm_rescue.solutions.mapping import LidarMapper
+from swarm_rescue.solutions.mapper import LidarMapper
 from swarm_rescue.solutions.data_types import MissionDecision
 from swarm_rescue.solutions.my_drone_basic_control import MyDroneBasicControl
 from swarm_rescue.solutions.my_drone_eval import MyDroneEval, waypoint_components

@@ -45,7 +45,7 @@ class PathNode:
 
 class DroneBis(DroneAbstract):
     CELL = 10.0
-    WAYPOINT_TOLERANCE = 8.0
+    WAYPOINT_TOLERANCE = 30.0
     OBSTACLE_DISTANCE = 30.0
     SLOW_DISTANCE = 150.0
     MAX_SPEED = 6.0

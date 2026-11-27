@@ -2,10 +2,14 @@ from swarm_rescue.simulation.drone.controller import CommandsDict
 from swarm_rescue.simulation.drone.drone_abstract import DroneAbstract
 from swarm_rescue.solutions.debug_draw import DebugDraw
 from swarm_rescue.solutions.localisation import MeasuredState, SemanticState
-from swarm_rescue.solutions.mission_planner import (GlobalPlanner, 
-                                                    ExplorationMission)
+from swarm_rescue.solutions.mission_planner import GlobalPlanner
 from swarm_rescue.solutions.control import PDController
-from swarm_rescue.solutions.mapping import LidarMapper
+        # PM TODO : Armand's algorithm 
+from swarm_rescue.solutions.mapper import LidarMapper
+from swarm_rescue.solutions.explorer import Explorer
+        # PM TODO : Aristide's algorithm 
+from swarm_rescue.solutions.mapper_aristide import Mapper_Aristide
+from swarm_rescue.solutions.explorer_aristide import Explorer_Aristide
 from swarm_rescue.solutions.path_follower import PathFollower
 
 
@@ -14,8 +18,13 @@ class RescueDrone(DroneAbstract):
                  planner:GlobalPlanner, 
                  estimator:MeasuredState, 
                  semantic_state:SemanticState, 
-                 controller:PDController, 
-                 mapper:LidarMapper,
+                 controller:PDController,
+        # PM TODO : Armand's algorithm 
+                #  mapper:LidarMapper,
+                #  explorer:Explorer,
+        # PM TODO : Aristide's algorithm 
+                 mapper:Mapper_Aristide,
+                 explorer:Explorer_Aristide,
                  path_follower:PathFollower,
                  **kwargs):
         super().__init__(**kwargs)
@@ -24,10 +33,14 @@ class RescueDrone(DroneAbstract):
         self.semantic_state = semantic_state
         self.controller = controller
         self.mapper = mapper
+        self.explorer = explorer
         self.path_follower = path_follower
+
         if self.mapper is not None and self.size_area is not None:
             self.mapper.set_map_size(self.size_area)
 
+        self.debug_draw = DebugDraw(self.planner.mission, mapper)
+        
     def define_message_for_all(self) -> None:
         return None
 
@@ -41,14 +54,25 @@ class RescueDrone(DroneAbstract):
 
         self.planner.update_mission(self.semantic_state.rescue_center_position, self.semantic_state, self.grasper.grasped_wounded_persons)
         
-        if isinstance(self.planner.mission, ExplorationMission):
-            #TODO: replace with a getter, so that we can apply kalman filtering later
-            ranges = self.lidar_values() 
-            angles = self.lidar_rays_angles() if ranges is not None else None
-            self.mapper.update_lidar_map(self.estimator.position_, self.estimator.yaw_, ranges, angles)
-            self.mapper.update_occupancy_grid(self.estimator.position_, self.estimator.yaw_, ranges, angles, self.elapsed_timestep)
+        # if isinstance(self.planner.mission, ExplorationMission):
+        #TODO: replace with a getter, so that we can apply kalman filtering later
+        ranges = self.lidar_values() 
+        angles = self.lidar_rays_angles() if ranges is not None else None
 
-        decision = self.planner.decide(self.estimator, self.semantic_state, self.path_follower)
+        # # PM TODO : Armand's mapper algorithm 
+        # self.mapper.update_lidar_map(self.estimator.position_, self.estimator.yaw_, ranges, angles)
+        # self.mapper.update_occupancy_grid(self.estimator.position_, self.estimator.yaw_, ranges, angles, self.elapsed_timestep)
+        
+        # # PM TODO : remove before deliver - use of true position / compass
+        # self.mapper.update_lidar_map(self.true_position(), self.true_angle(), ranges, angles)
+        # self.mapper.update_occupancy_grid(self.true_position(), self.true_angle(), ranges, angles, self.elapsed_timestep)
+        # if self.elapsed_timestep % 10 == 0:
+        #     self.debug_draw.plot_occupancy_grid()
+
+        # PM TODO : Aristide's mapper algorithm 
+        self.explorer.scan(ranges, angles, self.estimator.position_, self.estimator.yaw_)
+
+        decision = self.planner.decide(self.estimator, self.semantic_state, self.mapper, self.explorer, self.path_follower)
 
         if decision.motion_reference.target is None:
             return {"forward": 0.0, "lateral": 0.0, "rotation": 0.0, "grasper": 0}

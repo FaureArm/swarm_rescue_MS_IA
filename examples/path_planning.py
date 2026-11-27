@@ -22,13 +22,12 @@ from swarm_rescue.simulation.drone.drone_abstract import DroneAbstract
 from swarm_rescue.simulation.elements.normal_wall import NormalWall
 from swarm_rescue.simulation.elements.wounded_person import WoundedPerson
 from swarm_rescue.simulation.gui_map.gui_sr import GuiSR
+from swarm_rescue.solutions.Astar import AstartPlanner, build_traversable_mask
 from swarm_rescue.solutions.control import PDController
 from swarm_rescue.solutions.data_types import (
     Activity, MissionDecision, MotionReference, OccupancyGrid, Waypoint,
 )
-from swarm_rescue.solutions.navigation import build_traversable_mask
 from swarm_rescue.solutions.path_follower import PathFollower
-from swarm_rescue.solutions.navigation import AstartPlanner, build_traversable_mask
 
 
 GOAL = np.array([-310.0, -140.0])  # 40 px above the stationary person.
