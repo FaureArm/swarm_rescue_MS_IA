@@ -4,6 +4,13 @@ import numpy as np
 
 from ..data_types import MissionIntent, NavigationResult, Observations, StateEstimate, WorldView
 
+"""Define what this subsystem can read and what it must provide.
+
+These protocols document the required methods, inputs, and return values.
+Any implementation that follows these contracts can be swapped in through
+assembly.py without changing the code that calls it.
+Implementations must provide the methods defined here and return the specified values.
+"""
 
 class MissionContext(Protocol):
     @property

@@ -16,10 +16,15 @@ class PDController:
         self.heading_goal = heading_goal
 
     def update(self, drone: ControlContext) -> CommandsDict:
-        return self._commands(
+        commands = self._commands(
             drone.navigation_result.motion, drone.pose, drone.intent.grasper,
             face_target=drone.intent.face_target,
         )
+
+        # if drone.intent.activity is Activity.EXPLORING and drone.pose is not None:
+        #     commands["rotation"] = 0.8
+
+        return commands
 
     def control(self, decision: MissionDecision, estimate) -> CommandsDict:
         """Compatibility entry point for the standalone planning scenario."""

@@ -19,6 +19,8 @@ class OccupancyGrid:
     FREE_THRESHOLD = -0.1
     OCCUPIED_THRESHOLD = 0.1
 
+    HIT_INFLATION_CELLS = 2
+
     def __init__(self, width = 2000, height = 2000, pos_hit_increment = 0.5, neg_hit_increment = 0.5):
         self.width = width + 100 # padding for values outside due to noise
         self.height = height + 100
@@ -37,7 +39,9 @@ class OccupancyGrid:
 
         # inflate obstalces
         if pos_hit:
-            offsets_x, offsets_y = np.meshgrid([-1, 0, 1], [-1, 0, 1])
+            radius = self.HIT_INFLATION_CELLS
+            offsets = np.arange(-radius, radius + 1)
+            offsets_x, offsets_y = np.meshgrid(offsets, offsets)
             x = np.asarray(x)[..., None] + offsets_x.ravel()
             y = np.asarray(y)[..., None] + offsets_y.ravel()
         grid_x, grid_y, in_bounds = self.world_to_grid(x, y)
