@@ -4,87 +4,41 @@ import numpy as np
 from matplotlib.colors import ListedColormap
 
 
+from .interface import DebugContext
+
+
 class DebugDraw:
-    def __init__(self, mission, mapper):
-        self.mission = mission
-        self.mapper = mapper
+    def __init__(self, *, interval: int = 10):
+        self._interval = interval
 
-    @property
-    def goal(self):
-        return self.mission.goal
+    def update(self, drone: DebugContext) -> None:
+        if drone.tick_observations.timestep % self._interval == 0:
+            self.plot_occupancy_grid(drone)
 
-    @property
-    def map(self):
-        return self.mapper.lidar_map_ if self.mapper is not None else None
-
-    def draw_top_layer(self):
-        if self.map:
-         arcade.draw_points(list(self.map), (0, 220, 255, 160), 2)
-        if self.goal is None:
-            return
-
-        # draw a basic circle
-        x, y = self.goal
-        arcade.draw_circle_outline(
-            center_x=float(x),
-            center_y=float(y),
-            radius=8,
-            color=(255, 0, 255),
-            border_width=2,
-        )
-
-
-    def plot_lidar_map(self):
-
-        if not self.map:
-            return
-
-        if not hasattr(self, "_map_plot") or not plt.fignum_exists(
-            self._map_plot[0].number
-        ):
-            plt.ion()
-            fig, ax = plt.subplots()
-            points = ax.scatter([], [], s=2, marker="s")
-            ax.set_aspect("equal", adjustable="box")
-            ax.set_xlabel("World x (px)")
-            ax.set_ylabel("World y (px)")
-            self._map_plot = fig, ax, points
-            plt.show(block=False)
-
-        fig, ax, points = self._map_plot
-        pixels = np.asarray(list(self.map))
-        points.set_offsets(pixels)
-        ax.update_datalim(pixels)
-        ax.autoscale_view()
-        ax.set_title(f"Occupied pixels: {len(self.map):,}")
-        fig.canvas.draw_idle()
-        fig.canvas.flush_events()
-
-    def plot_occupancy_grid(self, path_planner, *, start, goal):
-        """Show the occupancy grid and the current A* traversability mask.
+    def plot_occupancy_grid(self, drone: DebugContext):
+        """Show the occupancy grid and the latest planning mask.
 
         Unknown cells are gray, uncertain cells light gray, free cells white,
         and occupied cells black. Cached frontier cells are green.
         Orange circles mark candidate waypoints; a magenta star marks the goal.
         Axes show grid indices.
         """
-        if self.mapper is None:
-            return None
 
         # OccupancyGrid currently stores its values as [x, y]; imshow uses [y, x].
-        grid = self.mapper.occupancy_grid_
+        grid = drone.world.grid
         states = grid.classify_cells().T
-        traversable = path_planner.get_traversable_mask(grid).T
+        mask = drone.navigation_result.traversable
         mask_pixels = np.zeros_like(states)
         mask_pixels[states == grid.FREE] = 1
-        mask_pixels[traversable] = 2
+        if mask is not None:
+            mask_pixels[mask.T] = 2
         height, width = states.shape
         pixels = np.full((height, width, 3), 0.5, dtype=np.float32)
         pixels[states == grid.UNCERTAIN] = 0.75
         pixels[states == grid.FREE] = 1.0
         pixels[states == grid.OCCUPIED] = 0.0
 
-        frontiers = self.mapper.frontier_mask_
+        frontiers = drone.world.frontiers
         if frontiers is not None:
             # A cached frontier may have been observed since its last refresh.
             visible_frontiers = frontiers.T & (states == grid.UNKNOWN)
@@ -134,11 +88,11 @@ class DebugDraw:
             )
             goal_marker = mask_ax.scatter(
                 [], [], c="magenta", edgecolors="black", marker="*", s=100,
-                zorder=3, label="Rescue center",
+                zorder=3, label="Requested destination",
             )
             route_line, = mask_ax.plot(
                 [], [], color="darkorange", linewidth=2, marker="o", markevery=[-1],
-                markersize=5, label="A* route",
+                markersize=5, label="Planned route",
             )
             mask_ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.13), ncols=3)
             self._occupancy_plot = (
@@ -156,9 +110,10 @@ class DebugDraw:
         mask_image.set_data(mask_pixels)
         mask_image.set_extent(extent)
         mask_image.axes.set_title(
-            f"A* mask ({path_planner.clearance_px:g} px clearance)\n"
-            "White: traversable, blue: clearance buffer, dark: non-free"
+            "Latest planning mask" if mask is not None else "Waiting for a route request"
         )
+        start = None if drone.pose is None else drone.pose.position
+        goal = drone.intent.destination
         for marker, point in ((start_marker, start), (goal_marker, goal)):
             offsets = np.empty((0, 2))
             if point is not None:
@@ -168,14 +123,16 @@ class DebugDraw:
             marker.set_offsets(offsets)
 
         origin = np.array([grid.width // 2, grid.height // 2])
-        if path_planner.current_route is None:
+        route = drone.navigation_result.route
+        if route is None:
             route_line.set_data([], [])
         else:
-            route_line.set_data(*(path_planner.current_route + origin).T)
-        candidates.set_offsets(self.mapper.frontier_waypoints_ + origin)
+            route_line.set_data(*(route + origin).T)
+        points = drone.intent.candidates
+        candidates.set_offsets(np.empty((0, 2)) if points is None else points + origin)
         selected.set_offsets(
-            np.empty((0, 2)) if self.goal is None
-            else np.asarray(self.goal, dtype=float).reshape(1, 2) + origin
+            np.empty((0, 2)) if goal is None
+            else np.asarray(goal, dtype=float).reshape(1, 2) + origin
         )
         ax.set_xlim(extent[:2])
         ax.set_ylim(extent[2:])

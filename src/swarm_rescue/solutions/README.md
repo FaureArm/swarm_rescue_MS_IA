@@ -64,7 +64,7 @@ Flight without a mapper can run with ground-truth access blocked.
 
 ```bash
 # Shaders enabled, ground-truth access enabled (eval)
-SWARM_RESCUE_USE_SHADERS=1 SWARM_RESCUE_ALLOW_TRUE_STATE=1 uv run -m swarm_rescue.launcher
+SWARM_RESCUE_USE_SHADERS=0 SWARM_RESCUE_ALLOW_TRUE_STATE=1 uv run -m swarm_rescue.launcher
 
 # Shaders disabled, ground-truth access enabled (experiments)
 SWARM_RESCUE_USE_SHADERS=0 SWARM_RESCUE_ALLOW_TRUE_STATE=1 uv run -m examples.test_basic_control

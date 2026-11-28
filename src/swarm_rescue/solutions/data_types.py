@@ -1,9 +1,12 @@
 """Shared data structures for the drone's components."""
 
+from dataclasses import dataclass
 from enum import Enum
 from typing import NamedTuple
 
 import numpy as np
+
+from .world.grid import OccupancyGrid as OccupancyGrid
 
 class Activity(Enum):
     """
@@ -19,13 +22,13 @@ class Activity(Enum):
 
 class MotionReference(NamedTuple):
     target: np.ndarray       # lookahead point, useful for display
-    velocity: np.ndarray       # desired world-frame velocity vector
+    velocity: np.ndarray | None  # desired world-frame velocity, px/tick
     heading: float | None
 
 
 class MissionDecision(NamedTuple):
     # small class to hold decisions and reuse easily
-    motion_reference: MotionReference
+    motion_reference: MotionReference | None
     grasper: int
     role: Activity
 
@@ -45,125 +48,78 @@ class Waypoint(NamedTuple):
     heading: float | None # for now might not use heading due to holonomic nature
 
 
-class OccupancyGrid:
-    """class to hold grid occupancy probabilistic map.
-    probability are loggits, so a value of 0 for the log_odds att means 50% proba
-    TODO: Initialise with max map size. 
-    add getters and setters ?
-    """
-
-    MIN_LOG_ODDS = -5.0
-    MAX_LOG_ODDS = 5.0
-
-    UNKNOWN = 0
-    FREE = 1
-    OCCUPIED = 2
-    UNCERTAIN = 3
-
-    FREE_THRESHOLD = -0.1
-    OCCUPIED_THRESHOLD = 0.1
-
-    def __init__(self, width = 2000, height = 2000, pos_hit_increment = 0.5, neg_hit_increment = 0.5):
-        self.width = width + 100 # padding for values outside due to noise
-        self.height = height + 100
-
-        # arrays holding our values
-        self.log_odds = np.zeros((self.width, self.height), dtype=np.float32)
-        self.last_observed = np.full((self.width, self.height), -np.inf, dtype=np.float64)
-        
-        self.log_odd_plus = pos_hit_increment
-        self.log_odd_minus = neg_hit_increment
-
-    def update_log_odds(self, x, y, pos_hit, timestep):
-        """Update evidence and observation time for valid cells."""
-        if not np.isfinite(timestep) or timestep < 0:
-            raise ValueError("Observation timestep must be finite and nonnegative")
-
-        # inflate obstalces
-        if pos_hit:
-            offsets_x, offsets_y = np.meshgrid([-1, 0, 1], [-1, 0, 1])
-            x = np.asarray(x)[..., None] + offsets_x.ravel()
-            y = np.asarray(y)[..., None] + offsets_y.ravel()
-        grid_x, grid_y, in_bounds = self.world_to_grid(x, y)
-
-        if not np.any(in_bounds):
-            return False
-
-        indices = grid_x[in_bounds], grid_y[in_bounds]
-        increment = self.log_odd_plus if pos_hit else -self.log_odd_minus
-
-        np.add.at(self.log_odds, indices, increment)
-
-        self.log_odds[indices] = np.clip(
-            self.log_odds[indices],
-            self.MIN_LOG_ODDS,
-            self.MAX_LOG_ODDS,
-        )
-        self.last_observed[indices] = timestep
-
-        return True
-
-    def world_to_grid(self, x, y):
-        """Convert world coordinates to grid indices and an in-bounds mask.
-
-        Invalid entries receive placeholder indices (0, 0).
-        """
-        world_x, world_y = np.broadcast_arrays(
-            np.asarray(x, dtype=float),
-            np.asarray(y, dtype=float),
-        )
-
-        grid_x = np.rint(world_x) + self.width // 2
-        grid_y = np.rint(world_y) + self.height // 2
-
-        in_bounds = (
-            np.isfinite(grid_x)
-            & np.isfinite(grid_y)
-            & (grid_x >= 0)
-            & (grid_x < self.width)
-            & (grid_y >= 0)
-            & (grid_y < self.height)
-        )
-
-        grid_x = np.where(in_bounds, grid_x, 0).astype(np.intp)
-        grid_y = np.where(in_bounds, grid_y, 0).astype(np.intp)
-
-        return grid_x, grid_y, in_bounds
-
-    def classify_cells(self):
-        """Label unseen cells UNKNOWN and observed, ambiguous cells UNCERTAIN."""
-        states = np.full(
-            self.log_odds.shape,
-            self.UNKNOWN,
-            dtype=np.uint8,
-        )
-
-        observed = np.isfinite(self.last_observed)
-        states[observed] = self.UNCERTAIN
-        states[observed & (self.log_odds < self.FREE_THRESHOLD)] = self.FREE
-        states[observed & (self.log_odds > self.OCCUPIED_THRESHOLD)] = self.OCCUPIED
-
-        return states
+class ObjectKind(Enum):
+    WOUNDED = "wounded"
+    RESCUE_CENTER = "rescue_center"
 
 
-    def frontier_mask(self):
-        """Return unknown cells adjacent to free space using four neighbors."""
-        states = self.classify_cells()
+class Detection(NamedTuple):
+    kind: ObjectKind
+    distance: float
+    angle: float
 
-        # create boolean arrays of same size as occupancy grid
-        free = states == self.FREE
-        unknown = states == self.UNKNOWN
 
-        # create an all-False boolean array with the same shape as the grid
-        has_free_neighbor = np.zeros_like(free)
+@dataclass(frozen=True)
+class Observations:
+    """One tick of measurements. Positions and ranges in px, yaw in radians, velocity in px/tick."""
 
-        # boolean mask of neighbors along x
-        has_free_neighbor[1:, :] |= free[:-1, :] # x+1
-        has_free_neighbor[:-1, :] |= free[1:, :] # x-1
+    timestep: int
+    position: np.ndarray | None
+    yaw: float | None
+    velocity: np.ndarray | None
+    ranges: np.ndarray | None
+    bearings: np.ndarray | None
+    detections: tuple[Detection, ...] = ()
+    holding_wounded: bool = False
 
-        #  boolean mask of neighbors along y
-        has_free_neighbor[:, 1:] |= free[:, :-1] #y+1
-        has_free_neighbor[:, :-1] |= free[:, 1:] #y-1
 
-        # rreturn a boolean mask where true means frontier cell
-        return unknown & has_free_neighbor
+class StateEstimate(NamedTuple):
+    """Complete pose in world coordinates and velocity in px/tick."""
+
+    position: np.ndarray
+    yaw: float
+    velocity: np.ndarray
+
+
+@dataclass(frozen=True)
+class WorldView:
+    """Borrowed map data. Consumers treat the grid and its arrays as read-only."""
+
+    grid: OccupancyGrid
+    frontiers: np.ndarray | None = None
+    frontier_revision: int = 0
+    wounded: tuple[np.ndarray, ...] = ()
+    rescue_center: np.ndarray | None = None
+
+
+class MovementMode(Enum):
+    IDLE = "idle"
+    DIRECT = "direct"
+    PLANNED = "planned"
+
+
+@dataclass(frozen=True)
+class MissionIntent:
+    """Mission output for one tick. Destinations are [x, y] world pixels."""
+
+    activity: Activity
+    destination: np.ndarray | None = None
+    mode: MovementMode = MovementMode.IDLE
+    grasper: int = 0
+    face_target: bool = False
+    candidates: np.ndarray | None = None
+
+
+class NavigationStatus(Enum):
+    IDLE = "idle"
+    FOLLOWING = "following"
+    ARRIVED = "arrived"
+    BLOCKED = "blocked"
+
+
+@dataclass(frozen=True)
+class NavigationResult:
+    status: NavigationStatus = NavigationStatus.IDLE
+    motion: MotionReference | None = None
+    route: np.ndarray | None = None
+    traversable: np.ndarray | None = None

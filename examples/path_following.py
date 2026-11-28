@@ -1,18 +1,19 @@
 """Manual path-controller experiment on the launcher's first evaluation map."""
 
 import argparse
+from dataclasses import replace
 
 import arcade
 import numpy as np
 
 from swarm_rescue.maps.map_intermediate_01 import MapIntermediate01
 from swarm_rescue.simulation.gui_map.gui_sr import GuiSR
-from swarm_rescue.solutions.control import PDController
-from swarm_rescue.solutions.data_types import Waypoint
+from swarm_rescue.solutions.assembly import build_components
+from swarm_rescue.solutions.data_types import NavigationResult, NavigationStatus, Waypoint, WorldView
 from swarm_rescue.solutions.drone import RescueDrone
-from swarm_rescue.solutions.localisation import MeasuredState
-from swarm_rescue.solutions.mission_planner import WaypointMission
-from swarm_rescue.solutions.path_follower import PathFollower
+from swarm_rescue.solutions.mission.manager import FixedGoalMission
+from swarm_rescue.solutions.navigation.path_follower import PathFollower
+from swarm_rescue.solutions.world.grid import OccupancyGrid
 
 
 # Below the wall ending at y=-93, then above the wall ending at y=89.
@@ -31,19 +32,42 @@ PATH = (
 )
 
 
-def path_components():
-    from swarm_rescue.solutions.my_drone_eval import (
-        path_components as eval_path_components,
-    )
+class SuppliedPathNavigation:
+    def __init__(self):
+        self.follower = PathFollower()
+        self.follower.set_path(PATH, lookahead=30.0, gain=0.05, max_pos=5.0, max_vel=0.1)
+        self.route = self.follower.positions
 
-    return eval_path_components()
+    def update(self, drone):
+        if drone.pose is None:
+            return NavigationResult()
+        return NavigationResult(
+            NavigationStatus.FOLLOWING, self.follower.track(drone.pose), self.route,
+        )
+
+
+class EmptyWorld:
+    def __init__(self, map_size):
+        self.view = WorldView(OccupancyGrid(*(map_size or (900, 600))))
+
+    def update(self, drone):
+        return self.view
+
+
+def path_components(map_size):
+    components = build_components(
+        map_size, mission=FixedGoalMission((PATH[-1].x, PATH[-1].y)), debug_plot=False,
+    )
+    return replace(
+        components, navigator=SuppliedPathNavigation(), world_model=EmptyWorld(map_size),
+    )
 
 
 class PathFollowingDrone(RescueDrone):
     """Debug-only drone: isolate control from noisy pose measurements."""
 
     def __init__(self, **kwargs):
-        super().__init__(**path_components(), **kwargs)
+        super().__init__(build_components=path_components, **kwargs)
         self.trajectory = []
         self.path_errors = []
         self.arrival_tick = None
@@ -59,11 +83,13 @@ class PathFollowingDrone(RescueDrone):
 
     def control(self):
         commands = super().control()
-        position = self.estimator.position_
+        if self.pose is None:
+            return commands
+        position = self.pose.position
         self.trajectory.append(tuple(position))
 
-        starts = self.path_follower.positions[:-1]
-        segments = np.diff(self.path_follower.positions, axis=0)
+        starts = self.parts.navigator.follower.positions[:-1]
+        segments = np.diff(self.parts.navigator.follower.positions, axis=0)
         fractions = np.clip(
             np.sum((position - starts) * segments, axis=1)
             / np.sum(segments * segments, axis=1), 0.0, 1.0,
@@ -72,9 +98,9 @@ class PathFollowingDrone(RescueDrone):
         error = float(np.min(np.linalg.norm(projections - position, axis=1)))
         self.path_errors.append(error)
 
-        final_error = np.linalg.norm(self.path_follower.positions[-1] - position)
-        speed = np.linalg.norm(self.estimator.velocity_)
-        on_final_segment = self.path_follower.index == len(PATH) - 2
+        final_error = np.linalg.norm(self.parts.navigator.follower.positions[-1] - position)
+        speed = np.linalg.norm(self.pose.velocity)
+        on_final_segment = self.parts.navigator.follower.index == len(PATH) - 2
         if on_final_segment and final_error < 5.0 and speed < 0.1:
             if self.arrival_tick is None:
                 self.arrival_tick = self.elapsed_timestep
@@ -82,7 +108,7 @@ class PathFollowingDrone(RescueDrone):
         if self.elapsed_timestep % 150 == 0:
             print(
                 f"tick={self.elapsed_timestep} "
-                f"segment={self.path_follower.index + 1}/{len(PATH) - 1} "
+                f"segment={self.parts.navigator.follower.index + 1}/{len(PATH) - 1} "
                 f"path_error={error:.2f}px final_error={final_error:.2f}px "
                 f"speed={speed:.2f}px/tick health={self.drone_health}"
             )
@@ -91,11 +117,11 @@ class PathFollowingDrone(RescueDrone):
     def draw_top_layer(self):
         super().draw_top_layer()
         arcade.draw_line_strip(
-            self.path_follower.positions.tolist(), (255, 165, 0), 2,
+            self.parts.navigator.follower.positions.tolist(), (255, 165, 0), 2,
         )
         if len(self.trajectory) > 1:
             arcade.draw_line_strip(self.trajectory, (0, 200, 255), 2)
-        for x, y in self.path_follower.positions[1:-1]:
+        for x, y in self.parts.navigator.follower.positions[1:-1]:
             arcade.draw_circle_filled(float(x), float(y), 5, (255, 165, 0))
             arcade.draw_circle_outline(float(x), float(y), 5, (0, 0, 0), 1)
 

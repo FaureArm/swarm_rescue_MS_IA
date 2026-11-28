@@ -2,7 +2,7 @@
 
 import numpy as np
 
-from swarm_rescue.solutions.data_types import MotionReference, Waypoint
+from swarm_rescue.solutions.data_types import MotionReference, StateEstimate, Waypoint
 from swarm_rescue.solutions.localisation import MeasuredState
 
 class PathFollower:
@@ -12,11 +12,17 @@ class PathFollower:
         # to be reset each time a path is completed
         self.has_path = False
 
+    def load(self, waypoints: list[Waypoint]) -> None:
+        self.set_path(waypoints, lookahead=15.0, gain=0.05, max_pos=5.0, max_vel=0.1)
+
+    def track(self, pose: StateEstimate) -> MotionReference:
+        return self._track_position(pose.position)
+
     def set_path(self, path, lookahead, gain, max_pos, max_vel):
 
         self.path_ = list(path) # path of waypoints to follow, final waypoint is final destination
         self.lookahead_ = lookahead # lookahead in pixels, could also implement in nber of waypoints/index?
-        self.position_gain_  = gain # 
+        self.position_gain_  = gain #
         self.max_pos_ = max_pos # maximum positon tolerance for arrival # TODO change name?
         self.max_vel_ = max_vel # maximum velocity at arrival #TODO same change name?
 
@@ -46,16 +52,19 @@ class PathFollower:
             MotionReference: return to control module, what should currently target
             at timestep t
         """
+        return self._track_position(estimate.position_)
+
+    def _track_position(self, current_position) -> MotionReference:
         # need current drone position to check against
         # where we are in the path
-        position = np.asarray(estimate.position_, dtype=float)
+        position = np.asarray(current_position, dtype=float)
 
         if self.positions.shape[0] == 1:
-            current_waypoint = Waypoint(estimate.position_[0], estimate.position_[1], 5, None)
+            current_waypoint = Waypoint(*position, 5, None)
             self.path_.insert(0, current_waypoint)
             self.set_path(self.path_, self.lookahead_, self.position_gain_, self.max_pos_, self.max_vel_ )
 
-        
+
         path_size = self.positions.shape[0]
 
         while self.index < path_size:
@@ -84,13 +93,13 @@ class PathFollower:
             self.has_path = False
             # and leave the drone motionless
             return MotionReference(
-                target=estimate.position_,
-                velocity=0,
+                target=position,
+                velocity=np.zeros(2),
                 heading=None,
             )
 
         ### Now we need to figure out the desired velocity and pos###
-        
+
         #  find the closest point on our segment
         projection = start + np.clip(fraction, 0.0, 1.0) * segment
         target = self._lookahead_point(projection)

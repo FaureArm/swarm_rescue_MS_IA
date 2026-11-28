@@ -1,12 +1,14 @@
-from swarm_rescue.solutions.drone import RescueDrone
-from swarm_rescue.solutions.my_drone_eval import waypoint_components
+from functools import partial
+
+from .assembly import build_components
+from .drone import RescueDrone
+from .mission.manager import FixedGoalMission
 
 
 class MyDroneMapper(RescueDrone):
     def __init__(self, *, goal=None, heading_goal=None, **kwargs):
-        super().__init__(
-            **waypoint_components(
-                mapping=True, goal=goal, heading_goal=heading_goal
-            ),
-            **kwargs,
+        factory = partial(
+            build_components, mission=FixedGoalMission((0.0, 0.0) if goal is None else goal),
+            heading_goal=heading_goal,
         )
+        super().__init__(build_components=factory, **kwargs)

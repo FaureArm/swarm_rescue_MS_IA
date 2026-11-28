@@ -22,12 +22,14 @@ from swarm_rescue.simulation.drone.drone_abstract import DroneAbstract
 from swarm_rescue.simulation.elements.normal_wall import NormalWall
 from swarm_rescue.simulation.elements.wounded_person import WoundedPerson
 from swarm_rescue.simulation.gui_map.gui_sr import GuiSR
-from swarm_rescue.solutions.Astar import AstartPlanner, build_traversable_mask
 from swarm_rescue.solutions.control import PDController
 from swarm_rescue.solutions.data_types import (
     Activity, MissionDecision, MotionReference, OccupancyGrid, Waypoint,
 )
-from swarm_rescue.solutions.path_follower import PathFollower
+from swarm_rescue.solutions.navigation.astar import AStarPlanner
+from swarm_rescue.solutions.navigation.path_follower import PathFollower
+from swarm_rescue.solutions.navigation.traversability import build_traversable_mask
+from swarm_rescue.solutions.navigation.waypoints import WaypointProfile
 
 
 GOAL = np.array([-310.0, -140.0])  # 40 px above the stationary person.
@@ -35,12 +37,9 @@ WAYPOINT_SPEED_COLORS = ListedColormap(colormaps["viridis"](np.linspace(0, 0.75,
 
 
 def plan_path(grid: OccupancyGrid, start: np.ndarray, goal: np.ndarray):
-    """A* insertion point: return world-coordinate (x, y) points, or None.
-
-    Include start and goal. The grid stores raw obstacles without drone-radius
-    inflation; traversability and clearance belong in the future planner.
-    """
-    return AstartPlanner().plan_path(grid, start, goal)
+    """Plan a route from start to goal using a 25 px clearance mask."""
+    mask = build_traversable_mask(grid, clearance_px=25.0)
+    return AStarPlanner().plan_path(grid, start, goal, traversable=mask)
 
 
 def build_known_grid(the_map):
@@ -111,7 +110,7 @@ class PathPlanningDrone(DroneAbstract):
             raise ValueError("Route must include the scenario start and goal")
         self.route = points.copy()
         self.arrived = False
-        waypoints = AstartPlanner(clearance_px = 25, max_speed=10, min_speed=1).extract_waypoints(points)
+        waypoints = WaypointProfile(max_speed=10, min_speed=1).prepare(points)
         waypoints[-1] = Waypoint(*points[-1], 0.0, None)
         self.path_follower.set_path(waypoints, lookahead=15.0, gain=0.05,
                                     max_pos=5.0, max_vel=0.1)

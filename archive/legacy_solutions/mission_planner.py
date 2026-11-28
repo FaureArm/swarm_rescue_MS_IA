@@ -2,13 +2,14 @@ import numpy as np
 
 from swarm_rescue.solutions.data_types import MissionDecision, Activity, Waypoint, MotionReference
         # PM TODO : Armand's algorithm 
-from swarm_rescue.solutions.mapper import LidarMapper
-from swarm_rescue.solutions.explorer import Explorer
+from swarm_rescue.solutions.world.lidar_mapper import LidarMapper
+from .explorer import Explorer
         # PM TODO : Aristide's algorithm 
-from swarm_rescue.solutions.mapper_aristide import Mapper_Aristide
-from swarm_rescue.solutions.explorer_aristide import Explorer_Aristide
-from swarm_rescue.solutions.path_follower import PathFollower
-from swarm_rescue.solutions.localisation import MeasuredState, SemanticState
+from .mapper_aristide import Mapper_Aristide
+from .explorer_aristide import Explorer_Aristide
+from swarm_rescue.solutions.navigation.path_follower import PathFollower
+from swarm_rescue.solutions.localisation import MeasuredState
+from .semantic_state import SemanticState
 
 EXPLORATION_THRESHOLD = 35.0 # exploration threshold
 APPROACHING_THRESHOLD = 100.0 # exploration threshold
@@ -49,12 +50,17 @@ class GlobalPlanner:
         return True
 
     def decide(self, estimator, semantic_state, mapper, explorer, path_follower, *, navigator):
+        if isinstance(self.mission, ExplorationMission):
+            return self.mission.decide(
+                estimator, semantic_state, mapper, explorer, navigator,
+            )
         if isinstance(self.mission, DropMission):
             return self.mission.decide(estimator, semantic_state, mapper, navigator)
         if isinstance(self.mission, StandBy):
             return self.mission.decide(estimator, semantic_state, mapper, explorer)
-        return self.mission.decide(estimator, semantic_state, mapper, explorer, path_follower)
-
+        return self.mission.decide(
+            estimator, semantic_state, mapper, explorer, path_follower,
+        )
 
 
 class ExplorationMission(Mission):
@@ -80,11 +86,11 @@ class ExplorationMission(Mission):
             #    mapper:LidarMapper,
             #    explorer:Explorer,
         # PM TODO : Aristide's algorithm 
-                 mapper:Mapper_Aristide,
-                 explorer:Explorer_Aristide,
-               path_follower:PathFollower) -> MissionDecision:
+                 mapper:LidarMapper,
+                 explorer:Explorer,
+               navigator) -> MissionDecision:
 
-        if estimator.position_ is None or path_follower is None:
+        if estimator.position_ is None:
             return MissionDecision(None, 0, Activity.EXPLORING)
 
         need_waypoint_update = (
@@ -103,12 +109,19 @@ class ExplorationMission(Mission):
 
             index = np.argmin(np.linalg.norm(candidates - position, axis=1))
             self.goal = candidates[index]
-            explorer.journey.append(self.goal.copy())
-            path_follower.set_path(
-                [Waypoint(*position, 5, None), Waypoint(*self.goal, 0.0, None)],
-                lookahead=15.0, gain=0.05, max_pos=5.0, max_vel=0.1,
+
+            loaded = navigator.set_goal(
+                mapper.occupancy_grid_,
+                position,
+                self.goal,
             )
-        return MissionDecision(path_follower.update(estimator), 0, Activity.EXPLORING)
+            if not loaded:
+                self.goal = None
+                return MissionDecision(None, 0, Activity.EXPLORING)
+
+            explorer.journey.append(self.goal.copy())
+
+        return MissionDecision(navigator.update(estimator), 0, Activity.EXPLORING)
 
 
         # # # PM TODO : Armand's algorithm 

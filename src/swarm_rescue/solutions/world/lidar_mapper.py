@@ -1,5 +1,5 @@
 import numpy as np
-from swarm_rescue.solutions import data_types as dt
+from .grid import OccupancyGrid
 from skimage.draw import line
 
 class LidarMapper:
@@ -8,19 +8,20 @@ class LidarMapper:
 
     def __init__(self, map_size = (2000, 2000), frontier_update_interval = 100):
         self.lidar_map_= set() # map holding hard pixels. Set to easily handle duplicates
-        self.occupancy_grid_ = dt.OccupancyGrid(*map_size)
+        self.occupancy_grid_ = OccupancyGrid(*map_size)
         self.max_lidar_range_ = 275 # max lidar range in pixelsS
         self.map_size_ = map_size
         self.frontier_mask_ = None
         self.frontier_waypoints_ = np.empty((0, 2), dtype=float)
         self.frontier_update_interval_ = frontier_update_interval
+        self.frontier_revision = 0
         self.drone_spawn_position = None
         self.lidar_free_bearings = None
 
     def set_map_size(self, map_size):
         """Set the playground dimensions and recreate the grid before mapping starts."""
         self.map_size_ = map_size
-        self.occupancy_grid_ = dt.OccupancyGrid(
+        self.occupancy_grid_ = OccupancyGrid(
             *map_size,
             pos_hit_increment=self.occupancy_grid_.log_odd_plus,
             neg_hit_increment=self.occupancy_grid_.log_odd_minus,
@@ -77,7 +78,7 @@ class LidarMapper:
             yaw (_type_): drone heading in world frame, in radian
         """
         # PM : store rescue center position at first shot
-        if (self.drone_spawn_position is None and 
+        if (self.drone_spawn_position is None and
             drone_position is not None):
             self.drone_spawn_position = np.asarray(drone_position)
 
@@ -104,7 +105,7 @@ class LidarMapper:
             # calculate pixels composing the line between drone
             # and pixel hit
             # TODO: uses a very basic line drawing algo, can be upgraded, but see if necessary
-            
+
             rows, cols = line(drone_y, drone_x, pixel[1], pixel[0])
 
             # Free pixels: exclude the endpoint
@@ -116,7 +117,7 @@ class LidarMapper:
             self.occupancy_grid_.update_log_odds(
                 cols[-1], rows[-1], pos_hit=True, timestep=timestep,
             )
-        
+
 
         # we also need to check empty spaces
         empty_endpoints = self.get_lidar_empties(drone_position, yaw, ranges, angles)
@@ -130,4 +131,17 @@ class LidarMapper:
         # update frontier mask
         if self.frontier_mask_ is None or timestep % self.frontier_update_interval_ == 0:
             self.frontier_mask_ = self.occupancy_grid_.frontier_mask()
+            self.frontier_revision += 1
 
+
+    def integrate(self, pose, ranges, angles, timestep):
+        self.update_lidar_map(pose.position, pose.yaw, ranges, angles)
+        self.update_occupancy_grid(pose.position, pose.yaw, ranges, angles, timestep)
+
+    @property
+    def grid(self) -> OccupancyGrid:
+        return self.occupancy_grid_
+
+    @property
+    def frontiers(self) -> np.ndarray | None:
+        return self.frontier_mask_

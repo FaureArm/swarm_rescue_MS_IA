@@ -49,7 +49,7 @@ Interface principale :
 
 Utilisation typique dans une classe de drone (cf. control() ci-dessous) :
 
-    from swarm_rescue.solutions.kalman import KalmanFusion
+    from swarm_rescue.solutions.localisation.kalman import KalmanFusion
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)

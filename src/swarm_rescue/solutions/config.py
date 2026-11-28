@@ -1,0 +1,14 @@
+# Map exploration settings from the integration branch.
+FRONTIER_UPDATE_INTERVAL = 100
+FRONTIER_ARRIVAL_PX = 35.0
+MINIMUM_CLUSTER_SIZE = 50
+MINIMUM_DISTANCE_PX = 50.0
+
+# Temporary approach point used by the existing return mission.
+RETURN_APPROACH = (350.0, 130.0)
+RELEASE_DISTANCE_PX = 35.0
+RETURN_FACING_DISTANCE_PX = 100.0
+
+CLEARANCE_PX = 25.0
+MIN_PATH_SPEED = 1.0
+MAX_PATH_SPEED = 5.0

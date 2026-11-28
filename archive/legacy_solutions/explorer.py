@@ -1,6 +1,6 @@
 import numpy as np
 from skimage.measure import label, regionprops
-from swarm_rescue.solutions.mapper import LidarMapper
+from swarm_rescue.solutions.world.lidar_mapper import LidarMapper
 
 class Explorer:
     def __init__(self, mapper:LidarMapper):
